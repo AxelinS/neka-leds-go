@@ -1,44 +1,30 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"go-neka-leds/src/esp32"
 	"go-neka-leds/src/screen"
 	"go-neka-leds/src/sdl_utils"
+	"go-neka-leds/src/settings"
 	"go-neka-leds/src/win"
 	"time"
 )
 
-var (
-	argTemperature float64
-	argBrightness  float64
-	argFPS         int
-	argMode        int
-	argKernel      int
-	argPadding     int
-	argLinelen     int
-	argLeds        int
-)
-
-func init() {
-	flag.Float64Var(&argTemperature, "temperature", 0, "Color temperature (-1.0 frío | 0.0 neutro | +2.0 cálido)")
-	flag.Float64Var(&argBrightness, "brightness", 0.4, "Brightness global (0.0 .. 1.0)")
-	flag.IntVar(&argFPS, "fps", 30, "Frames per second")
-	flag.IntVar(&argMode, "mode", 1, "Modo de operación")
-	flag.IntVar(&argKernel, "kernel", 3, "Tamaño de kernel")
-	flag.IntVar(&argPadding, "padding", 100, "Separacion de pixeles al borde")
-	flag.IntVar(&argLinelen, "linelen", 50, "Largo de las lineas")
-	flag.IntVar(&argLeds, "leds_count", 58, "Cantidad de leds")
-}
-
 func main() {
-	fmt.Println("Iniciando programa...")
+
+	s := settings.InitializeSettings()
+
+	if s.Brightness < 0 || s.Brightness > 1 {
+		s.Brightness = 0.4
+	}
+	if s.FPS <= 0 {
+		s.FPS = 30
+	}
+
 	fmt.Println("Buscando ESP32...")
 	devs := esp32.DiscoverESP32()
 	if len(devs) == 0 {
 		fmt.Println("No se encontraron ESP32")
-		return
 	}
 	fmt.Printf("Se encontraron %v dispositivos\n", len(devs))
 	for i, d := range devs {
@@ -46,34 +32,64 @@ func main() {
 	}
 
 	_, _, width, height := win.GetPrimaryMonitor()
-	points := screen.RectanglePerimeterPoints(width, height, argLeds, argPadding)
+	if s.Padding < 1 || s.Padding > height/3 {
+		s.Padding = 1
+	}
 
-	led_s := screen.LedSettings{
+	// Inicializa los pixeles a recoger del modo standard
+	inner, outer := screen.GetInnerOuterVals(width, height, s.LedsCount, s.Padding, s.LineLen)
+
+	pixelLines := screen.BuildPixelLinesBetweenPerimeters(
+		outer,
+		inner,
+		width,
+		height,
+		s.LineTickness,
+	)
+	// Inicializa los pixeles a recoger del modo cine
+	o_cine := screen.ApplyCinemaPadding(outer, width, height, s.Padding, s.CinePaddingY)
+	i_cine := screen.ApplyCinemaPadding(inner, width, height, s.Padding+s.LineLen, s.CinePaddingY+(s.LineLen))
+
+	pixelLinesCine := screen.BuildPixelLinesBetweenPerimeters(
+		o_cine,
+		i_cine,
+		width,
+		height,
+		s.LineTickness,
+	)
+
+	// Inicializa el gestor de leds
+	led_s := screen.LedsManager{
 		Devs:            devs,
 		MonitorSettings: screen.MonitorSettings{Width: width, Height: height},
-		CountSide:       screen.CountSides(points, width, height, argPadding),
+		CountSide:       screen.CountSides(outer, width, height, s.Padding),
 		Pause:           false,
-		LedsCount:       argLeds,
-		Temperature:     argTemperature,
-		Brightness:      argBrightness,
-		Mode:            argMode,
-		KernelSize:      argKernel,
-		Padding:         argPadding,
-		LineLen:         argLinelen,
-		Points:          points,
 
-		SampleLines: screen.BuildSampleLines(points, width, height, argPadding, argLinelen),
+		// settings
+		S:              s,
+		WinCaptureMode: 0,
+		Cinema:         false,
+
+		//
+
+		Points:      outer,
+		PixelLines:  pixelLines,
+		SampleLines: screen.PixelLinesToSampleLines(pixelLines, width),
+
+		PointsCinema: o_cine,
+		PixelCinema:  pixelLinesCine,
+		LinesCinema:  screen.PixelLinesToSampleLines(pixelLinesCine, width),
 	}
 
 	go func() {
 		cap := win.NewScreenCapturer(width, height)
 		defer cap.Close()
-		ticker := time.NewTicker(time.Second / time.Duration(argFPS))
+		ticker := time.NewTicker(time.Second / time.Duration(led_s.S.FPS))
 		defer ticker.Stop()
 		for range ticker.C {
 			if !led_s.Pause {
-				img := cap.Capture()
-				values := led_s.GetLedValues(img, width, height, points)
+				img := cap.Capture(led_s.WinCaptureMode)
+				values := led_s.GetLedValues(img, width, height, outer)
 				for _, dev := range devs {
 					if dev.Connected {
 						dev.SafeWrite("RGB " + values + "\n")

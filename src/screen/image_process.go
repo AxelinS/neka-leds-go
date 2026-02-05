@@ -2,6 +2,8 @@ package screen
 
 import (
 	"go-neka-leds/src/esp32"
+	"go-neka-leds/src/settings"
+	"math"
 	"strconv"
 	"strings"
 )
@@ -10,25 +12,28 @@ type MonitorSettings struct {
 	Width, Height int
 }
 
-type LedSettings struct {
+type LedsManager struct {
 	Devs []esp32.ESP32
 	MonitorSettings
-	CountSide SideCount
-	Pause     bool
-	LedsCount int
+	CountSide      SideCount
+	Pause          bool
+	WinCaptureMode int
 
-	Temperature float64
-	Brightness  float64
-	Mode        int
+	S settings.Settings
 
-	KernelSize int
-	Padding    int
-
-	LineLen      int
-	SampleLines  []SampleLine
-	ScaledLines  []PixelLine
 	Points       []Point
 	ScaledPoints []Point
+
+	SampleLines []SampleLine
+	PixelLines  []PixelLine
+	ScaledLines []PixelLine
+
+	Cinema             bool
+	PointsCinema       []Point
+	ScaledPointsCinema []Point
+	LinesCinema        []SampleLine
+	PixelCinema        []PixelLine
+	ScaledLinesCinema  []PixelLine
 }
 
 type Side int
@@ -44,89 +49,119 @@ type SampleLine struct {
 	Offsets []int
 }
 
-func BuildPixelLines(
-	pts []Point,
+// Reinicia todos los valores de los puntos, lineas y escalas.
+func (l *LedsManager) Restart() {
+	inner, outer := GetInnerOuterVals(l.Width, l.Height, l.S.LedsCount, l.S.Padding, l.S.LineLen)
+	pixelLines := BuildPixelLinesBetweenPerimeters(
+		outer,
+		inner,
+		l.Width,
+		l.Height,
+		l.S.LineTickness,
+	)
+	l.Points = outer
+	l.PixelLines = pixelLines
+	l.SampleLines = PixelLinesToSampleLines(pixelLines, l.Width)
+
+	o_cine := ApplyCinemaPadding(outer, l.Width, l.Height, l.S.Padding, l.S.CinePaddingY)
+	i_cine := ApplyCinemaPadding(inner, l.Width, l.Height, l.S.Padding+l.S.LineLen, l.S.CinePaddingY+(l.S.LineLen))
+	pixelLinesCine := BuildPixelLinesBetweenPerimeters(
+		o_cine,
+		i_cine,
+		l.Width,
+		l.Height,
+		l.S.LineTickness,
+	)
+	l.PointsCinema = o_cine
+	l.PixelCinema = pixelLinesCine
+	l.LinesCinema = PixelLinesToSampleLines(pixelLinesCine, l.Width)
+}
+
+func RasterizeThickLine(
+	a, b Point,
+	thickness int,
 	w, h int,
-	padding int,
-	lineLen int,
-) []PixelLine {
+) []Point {
 
-	x0, y0 := padding, padding
-	x1, y1 := w-padding, h-padding
+	var pixels []Point
 
-	lines := make([]PixelLine, len(pts))
+	dx := b.X - a.X
+	dy := b.Y - a.Y
+	steps := int(math.Max(math.Abs(float64(dx)), math.Abs(float64(dy))))
 
-	for i, p := range pts {
-		side := DetectSide(p, x0, y0, x1, y1)
-
-		var dx, dy int
-		switch side {
-		case Top:
-			dx, dy = 0, 1
-		case Bottom:
-			dx, dy = 0, -1
-		case Left:
-			dx, dy = 1, 0
-		case Right:
-			dx, dy = -1, 0
-		}
-
-		pixels := make([]Point, 0, lineLen)
-
-		for k := 0; k < lineLen; k++ {
-			xx := p.X + dx*k
-			yy := p.Y + dy*k
-
-			if xx < 0 || yy < 0 || xx >= w || yy >= h {
-				break
-			}
-
-			pixels = append(pixels, Point{xx, yy})
-		}
-
-		lines[i] = PixelLine{Pixels: pixels}
+	if steps == 0 {
+		return pixels
 	}
 
+	for i := 0; i <= steps; i++ {
+		t := float64(i) / float64(steps)
+		x := int(float64(a.X) + float64(dx)*t)
+		y := int(float64(a.Y) + float64(dy)*t)
+
+		// normal perpendicular
+		nx := -dy
+		ny := dx
+
+		lenN := math.Hypot(float64(nx), float64(ny))
+		if lenN == 0 {
+			continue
+		}
+
+		nxF := float64(nx) / lenN
+		nyF := float64(ny) / lenN
+
+		for o := -thickness / 2; o <= thickness/2; o++ {
+			xx := int(float64(x) + nxF*float64(o))
+			yy := int(float64(y) + nyF*float64(o))
+
+			if xx >= 0 && yy >= 0 && xx < w && yy < h {
+				pixels = append(pixels, Point{xx, yy})
+			}
+		}
+	}
+
+	return pixels
+}
+
+func BuildPixelLinesBetweenPerimeters(
+	outer []Point,
+	inner []Point,
+	w, h int,
+	thickness int,
+) []PixelLine {
+	n := min(len(outer), len(inner))
+	lines := make([]PixelLine, n)
+	for i := range n {
+		pixels := RasterizeThickLine(
+			outer[i],
+			inner[i],
+			thickness,
+			w,
+			h,
+		)
+		lines[i] = PixelLine{Pixels: pixels}
+	}
 	return lines
 }
 
-func BuildSampleLines(
-	pts []Point,
-	w, h int,
-	padding int,
-	lineLen int,
+func PixelLinesToSampleLines(
+	lines []PixelLine,
+	w int,
 ) []SampleLine {
 
-	x0, y0 := padding, padding
-	x1, y1 := w-padding, h-padding
+	out := make([]SampleLine, len(lines))
 
-	lines := make([]SampleLine, len(pts))
+	for i, l := range lines {
+		offsets := make([]int, len(l.Pixels))
 
-	for i, p := range pts {
-		side := DetectSide(p, x0, y0, x1, y1)
-		var dx, dy int
-		switch side {
-		case Top:
-			dx, dy = 0, 1
-		case Bottom:
-			dx, dy = 0, -1
-		case Left:
-			dx, dy = 1, 0
-		case Right:
-			dx, dy = -1, 0
+		for j, p := range l.Pixels {
+			offsets[j] = (p.Y*w + p.X) * 4
 		}
-		offsets := make([]int, 0, lineLen)
-		for k := range lineLen {
-			xx := p.X + dx*k
-			yy := p.Y + dy*k
-			if xx < 0 || yy < 0 || xx >= w || yy >= h {
-				break
-			}
-			offsets = append(offsets, (yy*w+xx)*4)
-		}
-		lines[i] = SampleLine{Offsets: offsets}
+
+		out[i] = SampleLine{Offsets: offsets}
 	}
-	return lines
+
+	return out
 }
 
 func DetectSide(p Point, x0, y0, x1, y1 int) Side {
@@ -156,8 +191,8 @@ func GetValuesColor(r, g, b int, pts int) string {
 	return sb.String()
 }
 
-func (l *LedSettings) GetLedValues(img []byte, w, h int, pts []Point) string {
-	switch l.Mode {
+func (l *LedsManager) GetLedValues(img []byte, w, h int, pts []Point) string {
+	switch l.S.Mode {
 	case 0:
 		return l.ComputeKernelLEDValues(img, w, h, pts)
 	case 1:
@@ -167,7 +202,7 @@ func (l *LedSettings) GetLedValues(img []byte, w, h int, pts []Point) string {
 	}
 }
 
-func (l *LedSettings) ComputeSimpleLEDValues(img []byte, w, h int, pts []Point) string {
+func (l *LedsManager) ComputeSimpleLEDValues(img []byte, w, h int, pts []Point) string {
 	var sb strings.Builder
 	sb.Grow(len(pts) * 12)
 
@@ -177,8 +212,8 @@ func (l *LedSettings) ComputeSimpleLEDValues(img []byte, w, h int, pts []Point) 
 		g := int(img[idx+1])
 		r := int(img[idx+2])
 
-		r, g, b = AdjustTemperature(r, g, b, l.Temperature)
-		r, g, b = AdjustBrightness(r, g, b, l.Brightness)
+		r, g, b = AdjustTemperature(r, g, b, l.S.Temperature)
+		r, g, b = AdjustBrightness(r, g, b, l.S.Brightness)
 
 		sb.WriteString(strconv.Itoa(r))
 		sb.WriteByte('-')
@@ -190,14 +225,14 @@ func (l *LedSettings) ComputeSimpleLEDValues(img []byte, w, h int, pts []Point) 
 	return sb.String()
 }
 
-func (l *LedSettings) ComputeKernelLEDValues(img []byte, w, h int, pts []Point) string {
+func (l *LedsManager) ComputeKernelLEDValues(img []byte, w, h int, pts []Point) string {
 	var sb strings.Builder
 	sb.Grow(len(pts) * 12)
 
 	for _, p := range pts {
 		r, g, b := l.AvgColorKernel(img, w, h, p.X, p.Y)
-		r, g, b = AdjustTemperature(r, g, b, l.Temperature)
-		r, g, b = AdjustBrightness(r, g, b, l.Brightness)
+		r, g, b = AdjustTemperature(r, g, b, l.S.Temperature)
+		r, g, b = AdjustBrightness(r, g, b, l.S.Brightness)
 
 		sb.WriteString(strconv.Itoa(r))
 		sb.WriteByte('-')
@@ -209,32 +244,47 @@ func (l *LedSettings) ComputeKernelLEDValues(img []byte, w, h int, pts []Point) 
 	return sb.String()
 }
 
-func (l *LedSettings) ComputeLineLEDValues(
+func (l *LedsManager) computeLine(line SampleLine, img []byte) (int, int, int) {
+	var rs, gs, bs int
+	for _, off := range line.Offsets {
+		bs += int(img[off])
+		gs += int(img[off+1])
+		rs += int(img[off+2])
+	}
+	n := len(line.Offsets)
+	if n > 0 {
+		rs /= n
+		gs /= n
+		bs /= n
+	}
+	rs, gs, bs = AdjustTemperature(rs, gs, bs, l.S.Temperature)
+	rs, gs, bs = AdjustBrightness(rs, gs, bs, l.S.Brightness)
+	return rs, gs, bs
+}
+
+func (l *LedsManager) ComputeLineLEDValues(
 	img []byte,
 ) string {
 
 	var sb strings.Builder
 	sb.Grow(len(l.SampleLines) * 12)
 
+	// computa las lineas del modo cine
+	if l.Cinema {
+		for _, line := range l.LinesCinema {
+			rs, gs, bs := l.computeLine(line, img)
+			sb.WriteString(strconv.Itoa(rs))
+			sb.WriteByte('-')
+			sb.WriteString(strconv.Itoa(gs))
+			sb.WriteByte('-')
+			sb.WriteString(strconv.Itoa(bs))
+			sb.WriteByte(' ')
+		}
+		return sb.String()
+	}
+
 	for _, line := range l.SampleLines {
-		var rs, gs, bs int
-
-		for _, off := range line.Offsets {
-			bs += int(img[off])
-			gs += int(img[off+1])
-			rs += int(img[off+2])
-		}
-
-		n := len(line.Offsets)
-		if n > 0 {
-			rs /= n
-			gs /= n
-			bs /= n
-		}
-
-		rs, gs, bs = AdjustTemperature(rs, gs, bs, l.Temperature)
-		rs, gs, bs = AdjustBrightness(rs, gs, bs, l.Brightness)
-
+		rs, gs, bs := l.computeLine(line, img)
 		sb.WriteString(strconv.Itoa(rs))
 		sb.WriteByte('-')
 		sb.WriteString(strconv.Itoa(gs))
@@ -246,12 +296,12 @@ func (l *LedSettings) ComputeLineLEDValues(
 	return sb.String()
 }
 
-func (l *LedSettings) AvgColorKernel(
+func (l *LedsManager) AvgColorKernel(
 	img []byte,
 	w, h int,
 	x, y int,
 ) (r, g, b int) {
-	radius := l.KernelSize >> 1
+	radius := l.S.KernelSize >> 1
 	var rs, gs, bs, count int
 	y0 := max(y-radius, 0)
 	y1 := y + radius

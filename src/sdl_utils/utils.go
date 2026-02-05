@@ -16,3 +16,32 @@ func ScancodeNameChain(ic []int32) string {
 	}
 	return s
 }
+
+func (m *MenuSystem) RestartLedsScales() {
+	pW := m.Led_s.Width / 4
+	pH := m.Led_s.Height / 4
+	pP := m.Led_s.S.Padding / 4
+
+	newH := m.Height
+	if m.Height < pH-20 {
+		newH = pH + 20
+	}
+	m.Window.SetSize(int32(m.Width+pW+20), int32(newH))
+
+	// Escalamos los pixeles para su presentacion de sdl
+	m.Led_s.ScaledPoints = ScalePoints(
+		m.Led_s.Points,
+		m.Led_s.Width, m.Led_s.Height, // resolución real
+		pW, pH, // ventana SDL
+		pP,
+	)
+	m.Led_s.ScaledLines = ScalePixelLines(m.Led_s.PixelLines, m.Led_s.Width, m.Led_s.Height, pW, pH, pP)
+
+	m.Led_s.ScaledPointsCinema = ScalePoints(
+		m.Led_s.PointsCinema,
+		m.Led_s.Width, m.Led_s.Height,
+		pW, pH,
+		pP,
+	)
+	m.Led_s.ScaledLinesCinema = ScalePixelLines(m.Led_s.PixelCinema, m.Led_s.Width, m.Led_s.Height, pW, pH, pP)
+}

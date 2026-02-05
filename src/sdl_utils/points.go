@@ -96,22 +96,30 @@ func (m *MenuSystem) renderPoints(renderer *sdl.Renderer) {
 	if m.Led_s.Pause {
 		renderer.SetDrawColor(255, 0, 0, 255)
 	}
-	renderer.RenderLine(float32(pW+spp)+left_padding, top_padding+2, float32(pW+spp-1)+left_padding, float32(pH-2)) // line right
+	renderer.RenderLine(float32(pW+spp)+left_padding, top_padding+2, float32(pW+spp-1)+left_padding, float32(pH-2)+top_padding) // line right
 	if m.Led_s.Pause {
 		renderer.SetDrawColor(255, 255, 255, 255)
 	}
-	renderer.RenderLine(float32(spp)+left_padding, float32(pH), float32(pW+spp)+left_padding, float32(pH-1)) // line bottom
+	renderer.RenderLine(float32(spp)+left_padding, float32(pH)+top_padding, float32(pW+spp)+left_padding, float32(pH-1)+top_padding) // line bottom
 	if m.Led_s.Pause {
 		renderer.SetDrawColor(0, 255, 0, 255)
 	}
-	renderer.RenderLine(float32(spp)+left_padding, top_padding+2, float32(spp+1)+left_padding, float32(pH-2)) // line left
+	renderer.RenderLine(float32(spp)+left_padding, top_padding+2, float32(spp+1)+left_padding, float32(pH-2)+top_padding) // line left
 
 	renderer.SetDrawColor(utils.ColorBlanco.R, utils.ColorBlanco.G, utils.ColorBlanco.B, utils.ColorBlanco.A)
 	renderer.DebugText(float32(spp+70)+left_padding, 5, "Top: "+strconv.Itoa(m.Led_s.CountSide.Top))
 	renderer.DebugText(float32(spp+10)+left_padding, 20, "Left: "+strconv.Itoa(m.Led_s.CountSide.Left))
 
+	// Mostramos los pixeles del modo cine solo si está activado
+	if m.Led_s.Cinema {
+		for _, p := range m.Led_s.ScaledPointsCinema {
+			renderer.RenderLine(float32(p.X+spp)+left_padding, float32(p.Y)+top_padding, float32(p.X+spp+1)+left_padding, float32(p.Y+1)+top_padding)
+		}
+		return
+	}
+
 	for _, p := range m.Led_s.ScaledPoints {
-		renderer.RenderLine(float32(p.X+spp), float32(p.Y)+top_padding, float32(p.X+spp+1), float32(p.Y+1)+top_padding)
+		renderer.RenderLine(float32(p.X+spp)+left_padding, float32(p.Y)+top_padding, float32(p.X+spp+1)+left_padding, float32(p.Y+1)+top_padding)
 	}
 }
 
@@ -130,18 +138,59 @@ func (m *MenuSystem) renderLines(renderer *sdl.Renderer) {
 	if m.Led_s.Pause {
 		renderer.SetDrawColor(255, 0, 0, 255)
 	}
-	renderer.RenderLine(float32(pW+spp)+left_padding, top_padding, float32(pW+spp-1)+left_padding, float32(pH-2)) // line right
+	renderer.RenderLine(float32(pW+spp)+left_padding, top_padding, float32(pW+spp-1)+left_padding, float32(pH-2)+top_padding) // line right
 	if m.Led_s.Pause {
 		renderer.SetDrawColor(255, 255, 255, 255)
 	}
-	renderer.RenderLine(float32(spp)+left_padding, float32(pH), float32(pW+spp)+left_padding, float32(pH-1)) // line bottom
+	renderer.RenderLine(float32(spp)+left_padding, float32(pH)+top_padding, float32(pW+spp)+left_padding, float32(pH-1)+top_padding) // line bottom
 	if m.Led_s.Pause {
 		renderer.SetDrawColor(0, 255, 0, 255)
 	}
-	renderer.RenderLine(float32(spp)+left_padding, top_padding+2, float32(spp+1)+left_padding, float32(pH-2)) // line left
+	renderer.RenderLine(float32(spp)+left_padding, top_padding+2, float32(spp+1)+left_padding, float32(pH-2)+top_padding) // line left
 
 	renderer.SetDrawColor(utils.ColorBlanco.R, utils.ColorBlanco.G, utils.ColorBlanco.B, utils.ColorBlanco.A)
-	for _, line := range m.Led_s.ScaledLines {
+
+	cTop := m.Led_s.CountSide.Top
+	cRight := cTop + m.Led_s.CountSide.Right
+	cBottom := cRight + m.Led_s.CountSide.Bottom
+	cLeft := cBottom + m.Led_s.CountSide.Left
+
+	if m.Led_s.Cinema {
+		for c, line := range m.Led_s.ScaledLinesCinema {
+			if c < cTop {
+				renderer.SetDrawColor(0, 0, 255, 255)
+			} else if c < cRight {
+				renderer.SetDrawColor(255, 0, 0, 255)
+			} else if c < cBottom {
+				renderer.SetDrawColor(255, 255, 255, 255)
+			} else if c < cLeft {
+				renderer.SetDrawColor(0, 255, 0, 255)
+			}
+			for i := 1; i < len(line.Pixels); i++ {
+				a := line.Pixels[i-1]
+				b := line.Pixels[i]
+
+				renderer.RenderLine(
+					float32(a.X+spp)+left_padding,
+					float32(a.Y)+top_padding,
+					float32(b.X+spp)+left_padding,
+					float32(b.Y)+top_padding,
+				)
+			}
+		}
+		return
+	}
+
+	for c, line := range m.Led_s.ScaledLines {
+		if c < cTop {
+			renderer.SetDrawColor(0, 0, 255, 255)
+		} else if c < cRight {
+			renderer.SetDrawColor(255, 0, 0, 255)
+		} else if c < cBottom {
+			renderer.SetDrawColor(255, 255, 255, 255)
+		} else if c < cLeft {
+			renderer.SetDrawColor(0, 255, 0, 255)
+		}
 		for i := 1; i < len(line.Pixels); i++ {
 			a := line.Pixels[i-1]
 			b := line.Pixels[i]

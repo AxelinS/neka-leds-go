@@ -48,7 +48,7 @@ type InputField struct {
 // Estructura principal del menu
 type MenuSystem struct {
 	WindowConfig
-	Led_s          *screen.LedSettings
+	Led_s          *screen.LedsManager
 	State          MenuState
 	Buttons        []AnimatedButton
 	InputFields    []InputField

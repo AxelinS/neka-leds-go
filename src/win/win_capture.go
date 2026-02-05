@@ -51,6 +51,7 @@ type captureImpl interface {
 type ScreenCapturer struct {
 	impl          captureImpl
 	width, height int
+	lastMode      int // 0=auto, 1=GDI forced
 }
 
 // GDI implementation (original behavior)
@@ -128,7 +129,31 @@ func NewScreenCapturer(w, h int) *ScreenCapturer {
 	return sc
 }
 
-func (s *ScreenCapturer) Capture() []byte {
+// Captura la pantalla y devuelve los bytes en formato BGRA
+// mode: 0=auto (DXGI if available, else GDI), 1=GDI forced
+func (s *ScreenCapturer) Capture(mode int) []byte {
+	if s.lastMode != mode {
+		fmt.Printf("[win] switching capture mode to %d\n", mode)
+	}
+
+	// si cambia de modo de forzado a auto, volvemos a intentar DXGI
+	if mode == 0 && s.lastMode == 1 {
+		if dx := newDXGICapturer(s.width, s.height); dx != nil {
+			s.impl.Close()
+			s.impl = dx
+		}
+	}
+	s.lastMode = mode
+
+	if mode == 1 {
+		// Forced GDI
+		if _, ok := s.impl.(*gdiImpl); !ok {
+			s.impl.Close()
+			s.impl = newGDIImpl(s.width, s.height)
+		}
+		return s.impl.Capture()
+	}
+
 	// If current implementation has died (e.g., DXGI duplication lost), switch to GDI
 	if s.impl != nil && !s.impl.IsAlive() {
 		fmt.Println("[win] capture impl not alive, switching to GDI fallback")

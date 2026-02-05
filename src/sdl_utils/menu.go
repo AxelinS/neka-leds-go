@@ -2,8 +2,8 @@ package sdl_utils
 
 import (
 	"go-neka-leds/src/screen"
+	"go-neka-leds/src/settings"
 	"go-neka-leds/src/utils"
-	"log"
 	"math"
 	"strconv"
 	"time"
@@ -17,7 +17,7 @@ const (
 )
 
 // Inicializar el sistema de menu
-func NewMenuSystem(winConfig WindowConfig, window *sdl.Window, led_settings *screen.LedSettings) *MenuSystem {
+func NewMenuSystem(winConfig WindowConfig, window *sdl.Window, led_settings *screen.LedsManager) *MenuSystem {
 	tc := TitleConfig{
 		X:     30,
 		Y:     10,
@@ -46,7 +46,7 @@ func (m *MenuSystem) setupMainMenu() {
 	m.Buttons = []AnimatedButton{
 		{
 			X: 10, Y: 50, Width: 150, Height: 50,
-			Text:       "Modo Test",
+			Text:       "Test Leds",
 			Color:      utils.ColorAzulTron,
 			HoverColor: utils.ColorAzulNeon,
 			Scale:      1.0, Alpha: 255,
@@ -64,6 +64,16 @@ func (m *MenuSystem) setupMainMenu() {
 		},
 		{
 			X: 10, Y: 190, Width: 150, Height: 50,
+			Text:       "Modo cine",
+			Color:      utils.ColorAzulTron,
+			HoverColor: utils.ColorAzulNeon,
+			Scale:      1.0, Alpha: 255,
+			Action: func() {
+				m.Led_s.Cinema = !m.Led_s.Cinema
+			},
+		},
+		{
+			X: 10, Y: 260, Width: 150, Height: 50,
 			Text:       "Configuracion",
 			Color:      utils.ColorAzulTron,
 			HoverColor: utils.ColorAzulNeon,
@@ -73,13 +83,26 @@ func (m *MenuSystem) setupMainMenu() {
 	}
 	m.InputFields = []InputField{
 		{
-			X: 10, Y: 260, Width: 130, Height: 40,
-			Text:        "30",
+			X: 10, Y: 330, Width: 70, Height: 40,
+			Text:        strconv.FormatInt(int64(m.Led_s.S.FPS), 10),
 			Placeholder: "FPS",
 			Title:       "FPS",
 			Type:        0,
+		}, {
+			X: 90, Y: 330, Width: 30, Height: 40,
+			Text:        strconv.FormatInt(int64(m.Led_s.WinCaptureMode), 10),
+			Placeholder: "DXGI",
+			Title:       "DXGI",
+			Type:        0,
 		},
 	}
+}
+
+func (m *MenuSystem) ParseCaptureMode() string {
+	if m.Led_s.WinCaptureMode == 0 {
+		return "DGXI + GDI"
+	}
+	return "GDI"
 }
 
 // Configurar menu de configuracion
@@ -103,9 +126,15 @@ func (m *MenuSystem) setupConfigMenu() {
 			Type:        1, // Combinaciones
 		}, {
 			X: 10, Y: 120, Width: 230, Height: 40,
-			Text:        "...",
-			Placeholder: "Comando por defecto",
-			Title:       "Texto de comando",
+			Text:        strconv.FormatInt(int64(m.Led_s.S.LedsCount), 10),
+			Placeholder: "Numero de leds",
+			Title:       "Leds_count",
+			Type:        0, // Texto
+		}, {
+			X: 10, Y: 180, Width: 230, Height: 40,
+			Text:        strconv.FormatFloat(m.Led_s.S.Temperature, 'f', 2, 64),
+			Placeholder: "Temperatura",
+			Title:       "Temperature",
 			Type:        0, // Texto
 		},
 	}
@@ -165,15 +194,29 @@ func (m *MenuSystem) renderMainMenu(renderer *sdl.Renderer) {
 	m.renderGlowText(renderer, "Neka-Leds", m.TitleConf.X, m.TitleConf.Y, utils.ColorAzulNeon, m.TitleConf.Scale)
 	m.renderDivisionMark(renderer)
 	// Estado del modo comando con indicador visual
-	statusText := "OFF"
+	statusTest := "OFF"
 	if m.Led_s.Pause {
-		statusText = "ON"
+		statusTest = "ON"
+	}
+	statusModo := "OFF"
+	if m.VerModo {
+		statusModo = "ON"
+	}
+	statusCine := "OFF"
+	if m.Led_s.Cinema {
+		statusCine = "ON"
 	}
 	glowIntensity := float32(0)
 
-	// Indicador del estado Command
-	m.renderStatusIndicator(renderer, 180, 62, true, glowIntensity)
-	renderer.DebugText(170, 80, statusText)
+	// Indicador de los estados de botones
+	m.renderStatusIndicator(renderer, 180, 62, m.Led_s.Pause, glowIntensity) // Test leds
+	renderer.DebugText(170, 80, statusTest)
+
+	m.renderStatusIndicator(renderer, 180, 127, m.VerModo, glowIntensity) // Ver modo
+	renderer.DebugText(170, 155, statusModo)
+
+	m.renderStatusIndicator(renderer, 180, 197, m.Led_s.Cinema, glowIntensity) // Modo cine
+	renderer.DebugText(170, 225, statusCine)
 
 	// Renderizar botones
 	for _, btn := range m.Buttons {
@@ -496,14 +539,31 @@ func (m *MenuSystem) HandleKeyInput(keysc sdl.Scancode, pressed bool) {
 			case 40: // tecla enter
 				field.IsFocused = false
 
-				if field.Title == "Velocidad" {
-					// Convertimos el string a entero
-					val, err := strconv.Atoi(field.Text)
-					if err != nil {
-						log.Printf("Error al convertir velocidad: %v", err)
-						val = 60
-					}
+				if field.Title == "FPS" {
+					val := utils.StrToInt(field.Text)
 					m.Fotogramas = uint32(1000.0 / val)
+					m.Led_s.S.FPS = val
+					settings.SaveSettings(m.Led_s.S)
+				}
+
+				if field.Title == "DXGI" {
+					val := utils.StrToInt(field.Text)
+					m.Led_s.WinCaptureMode = val
+					settings.SaveSettings(m.Led_s.S)
+				}
+
+				if field.Title == "Leds_count" {
+					val := utils.StrToInt(field.Text)
+					m.Led_s.S.LedsCount = val
+					m.Led_s.Restart()
+					m.RestartLedsScales()
+					settings.SaveSettings(m.Led_s.S)
+				}
+
+				if field.Title == "Temperature" {
+					val := utils.StrToFloat(field.Text)
+					m.Led_s.S.Temperature = val
+					settings.SaveSettings(m.Led_s.S)
 				}
 
 				if field.Type != 1 {

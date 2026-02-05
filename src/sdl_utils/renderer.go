@@ -1,7 +1,6 @@
 package sdl_utils
 
 import (
-	"go-neka-leds/src/screen"
 	. "go-neka-leds/src/utils"
 	"log"
 	"time"
@@ -24,6 +23,7 @@ func (w *WindowApp) RenderApp() {
 		log.Println(err)
 		return
 	}
+	w.Window = window
 	img.LoadLibrary(img.Path())
 	iconSurf, err := img.Load("./icon.png")
 	if err != nil {
@@ -36,28 +36,8 @@ func (w *WindowApp) RenderApp() {
 	defer iconSurf.Destroy()
 
 	// Inicializar el sistema de menu
-	menuSystem := NewMenuSystem(w.WindowConfig, window, w.LedSettings)
-
-	pW := w.LedSettings.Width / 4
-	pH := w.LedSettings.Height / 4
-	pP := w.LedSettings.Padding / 4
-
-	newH := w.Height
-	if w.Height < pH-20 {
-		newH = pH + 20
-	}
-	window.SetSize(int32(w.Width+pW+20), int32(newH))
-
-	menuSystem.Led_s.ScaledPoints = ScalePoints(
-		menuSystem.Led_s.Points,
-		menuSystem.Led_s.Width, menuSystem.Led_s.Height, // resolución real
-		pW, pH, // ventana SDL
-		pP,
-	)
-
-	pixelLines := screen.BuildPixelLines(menuSystem.Led_s.Points, menuSystem.Led_s.Width,
-		menuSystem.Led_s.Height, menuSystem.Led_s.Padding, menuSystem.Led_s.LineLen)
-	menuSystem.Led_s.ScaledLines = ScalePixelLines(pixelLines, menuSystem.Led_s.Width, menuSystem.Led_s.Height, pW, pH, pP)
+	menuSystem := NewMenuSystem(w.WindowConfig, window, w.LedsManager)
+	menuSystem.RestartLedsScales()
 
 	// Variables para el control de tiempo
 	lastTime := time.Now()
