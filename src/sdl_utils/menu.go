@@ -28,7 +28,7 @@ func NewMenuSystem(winConfig WindowConfig, window *sdl.Window, led_settings *scr
 		Led_s:         led_settings,
 		State:         MenuPrincipal,
 		AnimationTime: 0,
-		FocusedField:  -1,
+		FocusedField:  "",
 		TitleConf:     tc,
 		Window:        window,
 		Blocker:       false,
@@ -43,8 +43,8 @@ func NewMenuSystem(winConfig WindowConfig, window *sdl.Window, led_settings *scr
 
 // Configurar menu principal
 func (m *MenuSystem) setupMainMenu() {
-	m.Buttons = []AnimatedButton{
-		{
+	m.Buttons = map[string]*AnimatedButton{
+		"TestLeds": {
 			X: 10, Y: 50, Width: 150, Height: 50,
 			Text:       "Test Leds",
 			Color:      utils.ColorAzulTron,
@@ -52,7 +52,7 @@ func (m *MenuSystem) setupMainMenu() {
 			Scale:      1.0, Alpha: 255,
 			Action: m.ModeTestPoints,
 		},
-		{
+		"TestMode": {
 			X: 10, Y: 120, Width: 150, Height: 50,
 			Text:       "Ver modo",
 			Color:      utils.ColorAzulTron,
@@ -62,7 +62,7 @@ func (m *MenuSystem) setupMainMenu() {
 				m.VerModo = !m.VerModo
 			},
 		},
-		{
+		"CinemaMode": {
 			X: 10, Y: 190, Width: 150, Height: 50,
 			Text:       "Modo cine",
 			Color:      utils.ColorAzulTron,
@@ -72,7 +72,7 @@ func (m *MenuSystem) setupMainMenu() {
 				m.Led_s.Cinema = !m.Led_s.Cinema
 			},
 		},
-		{
+		"Config": {
 			X: 10, Y: 260, Width: 150, Height: 50,
 			Text:       "Configuracion",
 			Color:      utils.ColorAzulTron,
@@ -81,34 +81,51 @@ func (m *MenuSystem) setupMainMenu() {
 			Action: m.openConfigMenu,
 		},
 	}
-	m.InputFields = []InputField{
-		{
-			X: 10, Y: 330, Width: 70, Height: 40,
-			Text:        strconv.FormatInt(int64(m.Led_s.S.FPS), 10),
-			Placeholder: "FPS",
-			Title:       "FPS",
-			Type:        0,
-		}, {
-			X: 90, Y: 330, Width: 30, Height: 40,
-			Text:        strconv.FormatInt(int64(m.Led_s.WinCaptureMode), 10),
-			Placeholder: "DXGI",
-			Title:       "DXGI",
-			Type:        0,
-		},
-	}
+	m.InputFields = map[string]*InputField{}
 }
 
 func (m *MenuSystem) ParseCaptureMode() string {
-	if m.Led_s.WinCaptureMode == 0 {
-		return "DGXI + GDI"
+	if m.Led_s.S.WinCaptureMode == 0 {
+		return "DGXI"
 	}
 	return "GDI"
 }
 
+func (m *MenuSystem) ParseStartPoint() string {
+	switch m.Led_s.S.StartPoint {
+	case 1:
+		return "Arriba-Derecha"
+	case 2:
+		return "Abajo-Derecha"
+	case 3:
+		return "Abajo-Izquierda"
+	default:
+		return "Arriba-Izquierda"
+	}
+}
+
+func (m *MenuSystem) ChangeCaptureMode() {
+	if m.Led_s.S.WinCaptureMode == 0 {
+		m.Led_s.S.WinCaptureMode = 1
+	} else {
+		m.Led_s.S.WinCaptureMode = 0
+	}
+	settings.SaveSettings(m.Led_s.S)
+}
+
+func (m *MenuSystem) ChangeStartPoint() {
+	m.Led_s.S.StartPoint += 1
+	if m.Led_s.S.StartPoint > 3 {
+		m.Led_s.S.StartPoint = 0
+	}
+	m.Led_s.Restart()
+	settings.SaveSettings(m.Led_s.S)
+}
+
 // Configurar menu de configuracion
 func (m *MenuSystem) setupConfigMenu() {
-	m.Buttons = []AnimatedButton{
-		{
+	m.Buttons = map[string]*AnimatedButton{
+		"BackMenu": {
 			X: 180, Y: 5, Width: 55, Height: 28,
 			Text:       "Menu",
 			Color:      utils.ColorAzulTron,
@@ -116,26 +133,70 @@ func (m *MenuSystem) setupConfigMenu() {
 			Scale:      1.0, Alpha: 255,
 			Action: m.backToMainMenu,
 		},
+		"CaptureMode": {
+			X: 10, Y: 240, Width: 80, Height: 40,
+			Text:       "Capture",
+			Color:      utils.ColorAzulTron,
+			HoverColor: utils.ColorAzulNeon,
+			Action:     m.ChangeCaptureMode,
+		},
+		"PuntoComienzo": {
+			X: 10, Y: 60, Width: 80, Height: 40,
+			Text:       "Pivote",
+			Color:      utils.ColorAzulTron,
+			HoverColor: utils.ColorAzulNeon,
+			Action:     m.ChangeStartPoint,
+		},
 	}
-	m.InputFields = []InputField{
-		{
-			X: 10, Y: 60, Width: 230, Height: 40,
-			Text:        "...",
-			Placeholder: "Combinacion de teclas",
-			Title:       "Modo comando",
-			Type:        1, // Combinaciones
-		}, {
-			X: 10, Y: 120, Width: 230, Height: 40,
+	m.InputFields = map[string]*InputField{
+		"FPS": {
+			X: 10, Y: 330, Width: 70, Height: 40,
+			Text:        strconv.FormatInt(int64(m.Led_s.S.FPS), 10),
+			Placeholder: "FPS",
+			Title:       "FPS",
+			Type:        0,
+		},
+		"LedsCount": {
+			X: 10, Y: 120, Width: 70, Height: 40,
 			Text:        strconv.FormatInt(int64(m.Led_s.S.LedsCount), 10),
-			Placeholder: "Numero de leds",
+			Placeholder: "Leds",
 			Title:       "Leds_count",
-			Type:        0, // Texto
-		}, {
-			X: 10, Y: 180, Width: 230, Height: 40,
+			Type:        0,
+		},
+		"Temperature": {
+			X: 10, Y: 180, Width: 70, Height: 40,
 			Text:        strconv.FormatFloat(m.Led_s.S.Temperature, 'f', 2, 64),
-			Placeholder: "Temperatura",
+			Placeholder: "Temp",
 			Title:       "Temperature",
-			Type:        0, // Texto
+			Type:        0,
+		},
+		"Padding": {
+			X: 100, Y: 120, Width: 70, Height: 40,
+			Text:        strconv.FormatInt(int64(m.Led_s.S.Padding), 10),
+			Placeholder: "Padding",
+			Title:       "Padding",
+			Type:        0,
+		},
+		"LineLen": {
+			X: 100, Y: 180, Width: 70, Height: 40,
+			Text:        strconv.FormatInt(int64(m.Led_s.S.LineLen), 10),
+			Placeholder: "LineLen",
+			Title:       "LineLen",
+			Type:        0,
+		},
+		"CinePaddingY": {
+			X: 190, Y: 120, Width: 70, Height: 40,
+			Text:        strconv.FormatInt(int64(m.Led_s.S.CinePaddingY), 10),
+			Placeholder: "CinePaddingY",
+			Title:       "CinePaddingY",
+			Type:        0,
+		},
+		"LineThick": {
+			X: 190, Y: 180, Width: 70, Height: 40,
+			Text:        strconv.FormatInt(int64(m.Led_s.S.LineThickness), 10),
+			Placeholder: "LineThick",
+			Title:       "LineThick",
+			Type:        0,
 		},
 	}
 }
@@ -146,29 +207,29 @@ func (m *MenuSystem) Update(deltaTime float64) {
 
 	// Actualizar animaciones de botones
 	for i := range m.Buttons {
-		btn := &m.Buttons[i]
-
+		btn := m.Buttons[i]
 		// Animacion de hover
-		if btn.IsHovered {
+		if m.Buttons[i].IsHovered {
 			btn.Scale = float32(1.0 + 0.1*math.Sin(m.AnimationTime*8))
 			btn.GlowIntensity = float32(0.5 + 0.3*math.Sin(m.AnimationTime*4))
 		} else {
 			btn.Scale = 1.0
 			btn.GlowIntensity = 0.0
 		}
-
 		// Animacion de pulsacion
 		if btn.IsPressed {
 			btn.Scale *= 0.95
 		}
+		m.Buttons[i] = btn
 	}
 
 	// Actualizar cursor parpadeante en campos de texto
 	for i := range m.InputFields {
-		field := &m.InputFields[i]
+		field := m.InputFields[i]
 		if field.IsFocused && time.Since(field.CursorBlink) > 500*time.Millisecond {
 			field.CursorBlink = time.Now()
 		}
+		m.InputFields[i] = field
 	}
 }
 
@@ -220,11 +281,11 @@ func (m *MenuSystem) renderMainMenu(renderer *sdl.Renderer) {
 
 	// Renderizar botones
 	for _, btn := range m.Buttons {
-		m.renderAnimatedButton(renderer, btn)
+		m.renderAnimatedButton(renderer, *btn)
 	}
 	for _, field := range m.InputFields {
 		renderer.DebugText(field.X, field.Y-10, field.Title)
-		m.renderInputField(renderer, field)
+		m.renderInputField(renderer, *field)
 	}
 
 	// Vista previa de puntos
@@ -244,14 +305,25 @@ func (m *MenuSystem) renderConfigMenu(renderer *sdl.Renderer) {
 	renderer.SetDrawColor(utils.ColorBlanco.R, utils.ColorBlanco.G, utils.ColorBlanco.B, utils.ColorBlanco.A)
 	// Renderizar campos de entrada
 	for _, field := range m.InputFields {
-		renderer.DebugText(field.X, field.Y-10, field.Title)
-		m.renderInputField(renderer, field)
+		switch field.Type {
+		case 1:
+			renderer.DebugText(field.X, field.Y-10, field.Title)
+		case 0:
+			renderer.DebugText(field.X, field.Y-10, field.Placeholder)
+		}
+
+		m.renderInputField(renderer, *field)
 	}
 
 	// Renderizar botones (flecha de retorno)
 	for _, btn := range m.Buttons {
-		m.renderAnimatedButton(renderer, btn)
+		m.renderAnimatedButton(renderer, *btn)
 	}
+
+	// Indicador de los estados de botones
+	renderer.DebugText(100, 70, m.ParseStartPoint())   // punto comienzo
+	renderer.DebugText(100, 250, m.ParseCaptureMode()) // modo captura
+
 }
 
 // Renderizar boton animado
@@ -446,15 +518,13 @@ func (m *MenuSystem) HandleMouseMotion(x, y int32) {
 	m.MouseX, m.MouseY = x, y
 
 	// Verificar hover en botones
-	for i := range m.Buttons {
-		btn := &m.Buttons[i]
+	for _, btn := range m.Buttons {
 		btn.IsHovered = m.isPointInButton(x, y, *btn)
 	}
 }
 
 func (m *MenuSystem) HandleMouseClick(x, y int32, pressed bool) {
-	for i := range m.Buttons {
-		btn := &m.Buttons[i]
+	for _, btn := range m.Buttons {
 		if m.isPointInButton(x, y, *btn) {
 			btn.IsPressed = pressed
 			if !pressed && btn.Action != nil {
@@ -465,13 +535,14 @@ func (m *MenuSystem) HandleMouseClick(x, y int32, pressed bool) {
 
 	// Manejar clics en campos de texto (solo en menu de configuracion)
 	if !pressed {
-		for i := range m.InputFields {
-			field := &m.InputFields[i]
+		for i, field := range m.InputFields {
 			if m.isPointInInputField(x, y, *field) {
 				// Desenfocar otros campos
 				m.Window.StopTextInput()
 				for j := range m.InputFields {
-					m.InputFields[j].IsFocused = false
+					f := m.InputFields[j]
+					f.IsFocused = false
+					m.InputFields[j] = f
 				}
 				field.IsFocused = true
 				if field.Type != 1 {
@@ -499,8 +570,8 @@ func (m *MenuSystem) isPointInInputField(x, y int32, field InputField) bool {
 
 // Manejar entrada de texto
 func (m *MenuSystem) HandleTextInput(text string) {
-	if m.FocusedField >= 0 && m.FocusedField < len(m.InputFields) {
-		field := &m.InputFields[m.FocusedField]
+	if m.FocusedField != "" {
+		field := m.InputFields[m.FocusedField]
 		if field.IsFocused {
 			field.Text += text
 			field.CursorBlink = time.Now()
@@ -518,8 +589,8 @@ func (m *MenuSystem) HandleKeyInput(keysc sdl.Scancode, pressed bool) {
 	}
 
 	// Manejar teclas especiales para campos de texto
-	if pressed && m.FocusedField >= 0 && m.FocusedField < len(m.InputFields) {
-		field := &m.InputFields[m.FocusedField]
+	if pressed && m.FocusedField != "" {
+		field := m.InputFields[m.FocusedField]
 
 		if field.IsFocused {
 			switch keycode {
@@ -534,44 +605,60 @@ func (m *MenuSystem) HandleKeyInput(keysc sdl.Scancode, pressed bool) {
 				}
 			case 41: // tecla escape
 				field.IsFocused = false
-				m.FocusedField = -1
+				m.FocusedField = ""
 				m.Blocker = false
 			case 40: // tecla enter
 				field.IsFocused = false
 
-				if field.Title == "FPS" {
+				switch field.Title {
+				case "Padding":
+					val := utils.StrToInt(field.Text)
+					m.Led_s.S.Padding = val
+					m.Led_s.Restart()
+					m.RestartLedsScales()
+					settings.SaveSettings(m.Led_s.S)
+				case "LineLen":
+					val := utils.StrToInt(field.Text)
+					m.Led_s.S.LineLen = val
+					m.Led_s.Restart()
+					m.RestartLedsScales()
+					settings.SaveSettings(m.Led_s.S)
+				case "FPS":
 					val := utils.StrToInt(field.Text)
 					m.Fotogramas = uint32(1000.0 / val)
 					m.Led_s.S.FPS = val
 					settings.SaveSettings(m.Led_s.S)
-				}
-
-				if field.Title == "DXGI" {
-					val := utils.StrToInt(field.Text)
-					m.Led_s.WinCaptureMode = val
-					settings.SaveSettings(m.Led_s.S)
-				}
-
-				if field.Title == "Leds_count" {
+				case "Leds_count":
 					val := utils.StrToInt(field.Text)
 					m.Led_s.S.LedsCount = val
 					m.Led_s.Restart()
 					m.RestartLedsScales()
 					settings.SaveSettings(m.Led_s.S)
-				}
-
-				if field.Title == "Temperature" {
+				case "Temperature":
 					val := utils.StrToFloat(field.Text)
 					m.Led_s.S.Temperature = val
 					settings.SaveSettings(m.Led_s.S)
+				case "CinePaddingY":
+					val := utils.StrToInt(field.Text)
+					m.Led_s.S.CinePaddingY = val
+					m.Led_s.Restart()
+					m.RestartLedsScales()
+					settings.SaveSettings(m.Led_s.S)
+				case "LineThick":
+					val := utils.StrToInt(field.Text)
+					m.Led_s.S.LineThickness = val
+					m.Led_s.Restart()
+					m.RestartLedsScales()
+					settings.SaveSettings(m.Led_s.S)
+				default:
 				}
 
 				if field.Type != 1 {
 					//config.SaveSettings(config.Settings{Any: "..."})
-					m.FocusedField = -1
+					m.FocusedField = ""
 				} else {
 					//config.SaveSettings(config.Settings{Any: "..."})
-					m.FocusedField = -1
+					m.FocusedField = ""
 				}
 				m.Blocker = false
 			default: // Otras teclas
@@ -589,6 +676,6 @@ func (m *MenuSystem) openConfigMenu() {
 func (m *MenuSystem) backToMainMenu() {
 	m.State = MenuPrincipal
 	m.setupMainMenu()
-	m.FocusedField = -1
+	m.FocusedField = ""
 	m.Blocker = false
 }

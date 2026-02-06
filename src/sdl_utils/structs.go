@@ -42,7 +42,7 @@ type InputField struct {
 	CursorPos     int
 	CursorBlink   time.Time
 	Title         string
-	Type          int8 // 0 texto - 1 combinaciones
+	Type          int8 // 0 texto - 1 combinaciones de teclas
 }
 
 // Estructura principal del menu
@@ -50,12 +50,12 @@ type MenuSystem struct {
 	WindowConfig
 	Led_s          *screen.LedsManager
 	State          MenuState
-	Buttons        []AnimatedButton
-	InputFields    []InputField
+	Buttons        map[string]*AnimatedButton
+	InputFields    map[string]*InputField
 	AnimationTime  float64
 	MouseX, MouseY int32
 	Keys           []bool
-	FocusedField   int // Para manejar que campo tiene el foco
+	FocusedField   string // Para manejar que campo tiene el foco
 	TitleConf      TitleConfig
 	Canales        utils.Canales
 	Window         *sdl.Window

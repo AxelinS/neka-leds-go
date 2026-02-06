@@ -28,7 +28,7 @@ func CountSides(points []Point, w, h, padding int) SideCount {
 	return c
 }
 
-func RectanglePerimeterPoints(w, h, n, padding int) []Point {
+func RectanglePerimeterPoints(w, h, n, padding, startPoint int) []Point {
 	x0, y0 := padding, padding
 	x1, y1 := w-padding, h-padding
 
@@ -43,17 +43,34 @@ func RectanglePerimeterPoints(w, h, n, padding int) []Point {
 	for range n {
 		d := dist
 		var x, y int
+
+		// Adjust distance based on startPoint to rotate the perimeter traversal
+		// startPoint: 0=top-left, 1=top-right, 2=bottom-right, 3=bottom-left
+		adjustedDist := d
+		switch startPoint {
+		case 1: // top-right: move down, left, up, right
+			adjustedDist = float64(top) + d
+		case 2: // bottom-right: move left, up, right, down
+			adjustedDist = float64(top) + float64(right) + d
+		case 3: // bottom-left: move up, right, down, left
+			adjustedDist = float64(2*top) + float64(right) + d
+		}
+
+		// Normalize distance to perimeter
+		adjustedDist = float64(int(adjustedDist) % perimeter)
+
+		// Calculate position based on adjusted distance
 		switch {
-		case d < float64(top):
-			x, y = x0+int(d), y0
-		case d < float64(top+right):
-			d -= float64(top)
+		case adjustedDist < float64(top):
+			x, y = x0+int(adjustedDist), y0
+		case adjustedDist < float64(top+right):
+			d := adjustedDist - float64(top)
 			x, y = x1, y0+int(d)
-		case d < float64(2*top+right):
-			d -= float64(top + right)
+		case adjustedDist < float64(2*top+right):
+			d := adjustedDist - float64(top+right)
 			x, y = x1-int(d), y1
 		default:
-			d -= float64(2*top + right)
+			d := adjustedDist - float64(2*top+right)
 			x, y = x0, y1-int(d)
 		}
 		points = append(points, Point{x, y})
@@ -66,6 +83,7 @@ func RectanglePerimeterPointsCinema(
 	w, h, n int,
 	padding int,
 	paddingCinema int,
+	startPoint int,
 ) []Point {
 	// padding base
 	x0 := padding
@@ -84,17 +102,33 @@ func RectanglePerimeterPointsCinema(
 	for range n {
 		d := dist
 		var x, y int
+
+		// Adjust distance based on startPoint to rotate the perimeter traversal
+		// startPoint: 0=top-left, 1=top-right, 2=bottom-right, 3=bottom-left
+		adjustedDist := d
+		switch startPoint {
+		case 1: // top-right: move down, left, up, right
+			adjustedDist = float64(top) + d
+		case 2: // bottom-right: move left, up, right, down
+			adjustedDist = float64(top) + float64(right) + d
+		case 3: // bottom-left: move up, right, down, left
+			adjustedDist = float64(2*top) + float64(right) + d
+		}
+
+		// Normalize distance to perimeter
+		adjustedDist = float64(int(adjustedDist) % perimeter)
+
 		switch {
-		case d < float64(top):
-			x, y = x0+int(d), y0
-		case d < float64(top+right):
-			d -= float64(top)
+		case adjustedDist < float64(top):
+			x, y = x0+int(adjustedDist), y0
+		case adjustedDist < float64(top+right):
+			d := adjustedDist - float64(top)
 			x, y = x1, y0+int(d)
-		case d < float64(2*top+right):
-			d -= float64(top + right)
+		case adjustedDist < float64(2*top+right):
+			d := adjustedDist - float64(top+right)
 			x, y = x1-int(d), y1
 		default:
-			d -= float64(2*top + right)
+			d := adjustedDist - float64(2*top+right)
 			x, y = x0, y1-int(d)
 		}
 		points = append(points, Point{x, y})

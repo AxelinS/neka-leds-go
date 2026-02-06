@@ -88,27 +88,52 @@ func (m *MenuSystem) renderPoints(renderer *sdl.Renderer) {
 	top_padding := float32(10)
 	left_padding := float32(10)
 
+	var t, r, b, l colorLine
+	switch m.Led_s.S.StartPoint {
+	case 0:
+		t = colorLine{0, 0, 255, 255}
+		r = colorLine{255, 0, 0, 255}
+		b = colorLine{255, 255, 255, 255}
+		l = colorLine{0, 255, 0, 255}
+	case 1:
+		t = colorLine{0, 255, 0, 255}
+		r = colorLine{0, 0, 255, 255}
+		b = colorLine{255, 0, 0, 255}
+		l = colorLine{255, 255, 255, 255}
+	case 2:
+		t = colorLine{255, 255, 255, 255}
+		r = colorLine{0, 255, 0, 255}
+		b = colorLine{0, 0, 255, 255}
+		l = colorLine{255, 0, 0, 255}
+	case 3:
+		t = colorLine{255, 0, 0, 255}
+		r = colorLine{255, 255, 255, 255}
+		b = colorLine{0, 255, 0, 255}
+		l = colorLine{0, 0, 255, 255}
+	}
 	renderer.SetDrawColor(utils.ColorGris.R, utils.ColorGris.G, utils.ColorGris.B, utils.ColorGris.A)
 	if m.Led_s.Pause {
-		renderer.SetDrawColor(0, 0, 255, 255)
+		renderer.SetDrawColor(t.R, t.G, t.B, t.A)
 	}
-	renderer.RenderLine(float32(spp)+left_padding, top_padding, float32(pW+spp)+left_padding, float32(1)+top_padding) // line top
+	renderer.RenderLine(float32(spp)+left_padding, top_padding+2, float32(pW+spp)+left_padding, float32(1)+top_padding) // line top
 	if m.Led_s.Pause {
-		renderer.SetDrawColor(255, 0, 0, 255)
+		renderer.SetDrawColor(r.R, r.G, r.B, r.A)
 	}
-	renderer.RenderLine(float32(pW+spp)+left_padding, top_padding+2, float32(pW+spp-1)+left_padding, float32(pH-2)+top_padding) // line right
+	renderer.RenderLine(float32(pW+spp)+left_padding, top_padding, float32(pW+spp-1)+left_padding, float32(pH-2)+top_padding) // line right
 	if m.Led_s.Pause {
-		renderer.SetDrawColor(255, 255, 255, 255)
+		renderer.SetDrawColor(b.R, b.G, b.B, b.A)
 	}
 	renderer.RenderLine(float32(spp)+left_padding, float32(pH)+top_padding, float32(pW+spp)+left_padding, float32(pH-1)+top_padding) // line bottom
 	if m.Led_s.Pause {
-		renderer.SetDrawColor(0, 255, 0, 255)
+		renderer.SetDrawColor(l.R, l.G, l.B, l.A)
 	}
 	renderer.RenderLine(float32(spp)+left_padding, top_padding+2, float32(spp+1)+left_padding, float32(pH-2)+top_padding) // line left
 
 	renderer.SetDrawColor(utils.ColorBlanco.R, utils.ColorBlanco.G, utils.ColorBlanco.B, utils.ColorBlanco.A)
-	renderer.DebugText(float32(spp+70)+left_padding, 5, "Top: "+strconv.Itoa(m.Led_s.CountSide.Top))
-	renderer.DebugText(float32(spp+10)+left_padding, 20, "Left: "+strconv.Itoa(m.Led_s.CountSide.Left))
+	renderer.DebugText(float32(spp+20)+left_padding, 25, "Top: "+strconv.Itoa(m.Led_s.CountSide.Top))
+	renderer.DebugText(float32(spp+20)+left_padding, 45, "Bottom: "+strconv.Itoa(m.Led_s.CountSide.Bottom))
+	renderer.DebugText(float32(spp+20)+left_padding, 65, "Left: "+strconv.Itoa(m.Led_s.CountSide.Left))
+	renderer.DebugText(float32(spp+20)+left_padding, 85, "Right: "+strconv.Itoa(m.Led_s.CountSide.Right))
 
 	// Mostramos los pixeles del modo cine solo si está activado
 	if m.Led_s.Cinema {
@@ -123,6 +148,10 @@ func (m *MenuSystem) renderPoints(renderer *sdl.Renderer) {
 	}
 }
 
+type colorLine struct {
+	R, G, B, A uint8
+}
+
 func (m *MenuSystem) renderLines(renderer *sdl.Renderer) {
 	spp := 200
 	pW := m.Led_s.Width / 4
@@ -130,21 +159,47 @@ func (m *MenuSystem) renderLines(renderer *sdl.Renderer) {
 
 	top_padding := float32(10)
 	left_padding := float32(10)
+
 	renderer.SetDrawColor(utils.ColorGris.R, utils.ColorGris.G, utils.ColorGris.B, utils.ColorGris.A)
+
+	var t, r, b, l colorLine
+	switch m.Led_s.S.StartPoint {
+	case 0:
+		t = colorLine{0, 0, 255, 255}
+		r = colorLine{255, 0, 0, 255}
+		b = colorLine{255, 255, 255, 255}
+		l = colorLine{0, 255, 0, 255}
+	case 1:
+		t = colorLine{0, 255, 0, 255}
+		r = colorLine{0, 0, 255, 255}
+		b = colorLine{255, 0, 0, 255}
+		l = colorLine{255, 255, 255, 255}
+	case 2:
+		t = colorLine{255, 255, 255, 255}
+		r = colorLine{0, 255, 0, 255}
+		b = colorLine{0, 0, 255, 255}
+		l = colorLine{255, 0, 0, 255}
+	case 3:
+		t = colorLine{255, 0, 0, 255}
+		r = colorLine{255, 255, 255, 255}
+		b = colorLine{0, 255, 0, 255}
+		l = colorLine{0, 0, 255, 255}
+	}
+
 	if m.Led_s.Pause {
-		renderer.SetDrawColor(0, 0, 255, 255)
+		renderer.SetDrawColor(t.R, t.G, t.B, t.A)
 	}
 	renderer.RenderLine(float32(spp)+left_padding, top_padding+2, float32(pW+spp)+left_padding, float32(1)+top_padding) // line top
 	if m.Led_s.Pause {
-		renderer.SetDrawColor(255, 0, 0, 255)
+		renderer.SetDrawColor(r.R, r.G, r.B, r.A)
 	}
 	renderer.RenderLine(float32(pW+spp)+left_padding, top_padding, float32(pW+spp-1)+left_padding, float32(pH-2)+top_padding) // line right
 	if m.Led_s.Pause {
-		renderer.SetDrawColor(255, 255, 255, 255)
+		renderer.SetDrawColor(b.R, b.G, b.B, b.A)
 	}
 	renderer.RenderLine(float32(spp)+left_padding, float32(pH)+top_padding, float32(pW+spp)+left_padding, float32(pH-1)+top_padding) // line bottom
 	if m.Led_s.Pause {
-		renderer.SetDrawColor(0, 255, 0, 255)
+		renderer.SetDrawColor(l.R, l.G, l.B, l.A)
 	}
 	renderer.RenderLine(float32(spp)+left_padding, top_padding+2, float32(spp+1)+left_padding, float32(pH-2)+top_padding) // line left
 

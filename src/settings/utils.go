@@ -13,10 +13,11 @@ type Settings struct {
 	Padding        int
 	LineLen        int
 	FPS            int
-	LineTickness   int
+	LineThickness  int
 	CinePaddingY   int
 	WinCaptureMode int
 	Cinema         bool
+	StartPoint     int // 0 arriba-izq, 1 arriba-der, 2 abajo-der, 3 abajo-izq
 }
 
 func GetDefaultSettings() Settings {
@@ -29,10 +30,11 @@ func GetDefaultSettings() Settings {
 		Padding:        1,
 		LineLen:        80,
 		FPS:            30,
-		LineTickness:   3,
+		LineThickness:  3,
 		CinePaddingY:   200,
 		WinCaptureMode: 0,
 		Cinema:         false,
+		StartPoint:     0,
 	}
 }
 

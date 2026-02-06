@@ -37,14 +37,14 @@ func main() {
 	}
 
 	// Inicializa los pixeles a recoger del modo standard
-	inner, outer := screen.GetInnerOuterVals(width, height, s.LedsCount, s.Padding, s.LineLen)
+	inner, outer := screen.GetInnerOuterVals(width, height, s.LedsCount, s.Padding, s.LineLen, s.StartPoint)
 
 	pixelLines := screen.BuildPixelLinesBetweenPerimeters(
 		outer,
 		inner,
 		width,
 		height,
-		s.LineTickness,
+		s.LineThickness,
 	)
 	// Inicializa los pixeles a recoger del modo cine
 	o_cine := screen.ApplyCinemaPadding(outer, width, height, s.Padding, s.CinePaddingY)
@@ -55,7 +55,7 @@ func main() {
 		i_cine,
 		width,
 		height,
-		s.LineTickness,
+		s.LineThickness,
 	)
 
 	// Inicializa el gestor de leds
@@ -66,9 +66,8 @@ func main() {
 		Pause:           false,
 
 		// settings
-		S:              s,
-		WinCaptureMode: 0,
-		Cinema:         false,
+		S:      s,
+		Cinema: false,
 
 		//
 
@@ -88,7 +87,7 @@ func main() {
 		defer ticker.Stop()
 		for range ticker.C {
 			if !led_s.Pause {
-				img := cap.Capture(led_s.WinCaptureMode)
+				img := cap.Capture(led_s.S.WinCaptureMode)
 				values := led_s.GetLedValues(img, width, height, outer)
 				for _, dev := range devs {
 					if dev.Connected {

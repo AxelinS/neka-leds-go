@@ -15,9 +15,8 @@ type MonitorSettings struct {
 type LedsManager struct {
 	Devs []esp32.ESP32
 	MonitorSettings
-	CountSide      SideCount
-	Pause          bool
-	WinCaptureMode int
+	CountSide SideCount
+	Pause     bool
 
 	S settings.Settings
 
@@ -51,13 +50,13 @@ type SampleLine struct {
 
 // Reinicia todos los valores de los puntos, lineas y escalas.
 func (l *LedsManager) Restart() {
-	inner, outer := GetInnerOuterVals(l.Width, l.Height, l.S.LedsCount, l.S.Padding, l.S.LineLen)
+	inner, outer := GetInnerOuterVals(l.Width, l.Height, l.S.LedsCount, l.S.Padding, l.S.LineLen, l.S.StartPoint)
 	pixelLines := BuildPixelLinesBetweenPerimeters(
 		outer,
 		inner,
 		l.Width,
 		l.Height,
-		l.S.LineTickness,
+		l.S.LineThickness,
 	)
 	l.Points = outer
 	l.PixelLines = pixelLines
@@ -70,7 +69,7 @@ func (l *LedsManager) Restart() {
 		i_cine,
 		l.Width,
 		l.Height,
-		l.S.LineTickness,
+		l.S.LineThickness,
 	)
 	l.PointsCinema = o_cine
 	l.PixelCinema = pixelLinesCine
