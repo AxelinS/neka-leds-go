@@ -86,7 +86,7 @@ func (m *MenuSystem) setupMainMenu() {
 
 func (m *MenuSystem) ParseCaptureMode() string {
 	if m.Led_s.S.WinCaptureMode == 0 {
-		return "DGXI"
+		return "DXGI"
 	}
 	return "GDI"
 }
@@ -196,6 +196,13 @@ func (m *MenuSystem) setupConfigMenu() {
 			Text:        strconv.FormatInt(int64(m.Led_s.S.LineThickness), 10),
 			Placeholder: "LineThick",
 			Title:       "LineThick",
+			Type:        0,
+		},
+		"Brightness": {
+			X: 280, Y: 180, Width: 70, Height: 40,
+			Text:        strconv.FormatFloat(m.Led_s.S.Brightness, 'f', 2, 64),
+			Placeholder: "Brightness",
+			Title:       "Brightness",
 			Type:        0,
 		},
 	}
@@ -649,6 +656,10 @@ func (m *MenuSystem) HandleKeyInput(keysc sdl.Scancode, pressed bool) {
 					m.Led_s.S.LineThickness = val
 					m.Led_s.Restart()
 					m.RestartLedsScales()
+					settings.SaveSettings(m.Led_s.S)
+				case "Brightness":
+					val := utils.StrToFloat(field.Text)
+					m.Led_s.S.Brightness = val
 					settings.SaveSettings(m.Led_s.S)
 				default:
 				}
