@@ -1,6 +1,10 @@
 package sdl_utils
 
-import "github.com/Zyko0/go-sdl3/sdl"
+import (
+	"strings"
+
+	"github.com/Zyko0/go-sdl3/sdl"
+)
 
 // Toma un valor Int32 y devuelve el String con el name de la key de SDL Scancode
 func IntToScancodeName(i int32) string {
@@ -10,11 +14,39 @@ func IntToScancodeName(i int32) string {
 
 // Toma un slice []int32 y devuelve un string compuesto por estos caracteres
 func ScancodeNameChain(ic []int32) string {
-	s := ""
+	var s strings.Builder
 	for _, w := range ic {
-		s += IntToScancodeName(w) + " "
+		s.WriteString(IntToScancodeName(w) + " ")
 	}
-	return s
+	return s.String()
+}
+
+func (m *MenuSystem) GetBtnModeActive(name string) bool {
+	switch name {
+	case "Screen":
+		if m.Led_s.S.Mode == 0 {
+			return true
+		}
+	case "Audio":
+		if m.Led_s.S.Mode == 1 {
+			return true
+		}
+	case "Static":
+		if m.Led_s.S.Mode == 2 {
+			return true
+		}
+	}
+	return false
+}
+func (m *MenuSystem) UpdateModeBtns() {
+	m.Buttons["ScreenMode"].Active = m.GetBtnModeActive("Screen")
+	m.Buttons["ScreenMode"].UpdateColor()
+
+	m.Buttons["AudioMode"].Active = m.GetBtnModeActive("Audio")
+	m.Buttons["AudioMode"].UpdateColor()
+
+	m.Buttons["StaticMode"].Active = m.GetBtnModeActive("Static")
+	m.Buttons["StaticMode"].UpdateColor()
 }
 
 func (m *MenuSystem) RestartLedsScales() {

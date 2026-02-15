@@ -18,6 +18,7 @@ var (
 	procSelectObject           = gdi32.NewProc("SelectObject")
 	procBitBlt                 = gdi32.NewProc("BitBlt")
 	procDeleteDC               = gdi32.NewProc("DeleteDC")
+	procDeleteObject           = gdi32.NewProc("DeleteObject")
 	procGetDIBits              = gdi32.NewProc("GetDIBits")
 )
 
@@ -110,6 +111,7 @@ func (g *gdiImpl) Capture() []byte {
 }
 
 func (g *gdiImpl) Close() {
+	procDeleteObject.Call(g.bitmap) // Clean up bitmap resources
 	procDeleteDC.Call(g.memDC)
 	procReleaseDC.Call(0, g.hdc)
 }
@@ -119,12 +121,17 @@ func (g *gdiImpl) IsAlive() bool { return true }
 // NewScreenCapturer tries DXGI first (if available) and falls back to GDI
 func NewScreenCapturer(w, h int) *ScreenCapturer {
 	sc := &ScreenCapturer{width: w, height: h}
-	if dx := newDXGICapturer(w, h); dx != nil {
+
+	// Try DXGI first - it will auto-detect monitor resolution
+	if dx := newDXGICapturer(); dx != nil {
 		sc.impl = dx
+		// Update dimensions to actual monitor size from DXGI
+		sc.width = dx.width
+		sc.height = dx.height
 		return sc
 	}
 
-	// Fallback to GDI
+	// Fallback to GDI with provided dimensions
 	sc.impl = newGDIImpl(w, h)
 	return sc
 }
@@ -136,9 +143,9 @@ func (s *ScreenCapturer) Capture(mode int) []byte {
 		fmt.Printf("[win] switching capture mode to %d\n", mode)
 	}
 
-	// si cambia de modo de forzado a auto, volvemos a intentar DXGI
+	// if switching from forced mode to auto, try DXGI again
 	if mode == 0 && s.lastMode == 1 {
-		if dx := newDXGICapturer(s.width, s.height); dx != nil {
+		if dx := newDXGICapturer(); dx != nil {
 			s.impl.Close()
 			s.impl = dx
 		}
@@ -160,6 +167,10 @@ func (s *ScreenCapturer) Capture(mode int) []byte {
 		s.impl.Close()
 		s.impl = newGDIImpl(s.width, s.height)
 	}
+
+	// impl.Capture() may return nil if:
+	// - DXGI: no new frame (timeout) or error
+	// - GDI: should always return data
 	return s.impl.Capture()
 }
 

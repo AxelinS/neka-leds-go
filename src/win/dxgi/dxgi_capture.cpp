@@ -6,6 +6,20 @@
 
 using Microsoft::WRL::ComPtr;
 
+// Scope guard para garantizar ReleaseFrame en salidas
+struct FrameGuard {
+    IDXGIOutputDuplication* dup;
+    bool shouldRelease;
+    
+    FrameGuard(IDXGIOutputDuplication* d) : dup(d), shouldRelease(true) {}
+    ~FrameGuard() {
+        if (shouldRelease && dup) {
+            dup->ReleaseFrame();
+        }
+    }
+    void cancel() { shouldRelease = false; }
+};
+
 static ComPtr<ID3D11Device> g_device;
 static ComPtr<ID3D11DeviceContext> g_context;
 static ComPtr<IDXGIOutputDuplication> g_duplication;
@@ -17,8 +31,12 @@ static void DebugLog(const char *msg) {
     OutputDebugStringA(msg);
 }
 
-extern "C" __declspec(dllexport) bool __stdcall DXGI_Init(int width, int height) {
-    if (g_duplication) return true;
+// Forward declaration
+extern "C" __declspec(dllexport) void __stdcall DXGI_Close();
+
+extern "C" __declspec(dllexport) bool __stdcall DXGI_Init() {
+    // Cleanup any previous state
+    DXGI_Close();
 
     UINT createDeviceFlags = 0;
     D3D_FEATURE_LEVEL featureLevels[] = { D3D_FEATURE_LEVEL_11_0 };
@@ -46,6 +64,7 @@ extern "C" __declspec(dllexport) bool __stdcall DXGI_Init(int width, int height)
     hr = g_device.As(&dxgiDevice);
     if (FAILED(hr)) {
         DebugLog("DXGI_Init: As<IDXGIDevice> failed\n");
+        DXGI_Close();
         return false;
     }
 
@@ -53,6 +72,7 @@ extern "C" __declspec(dllexport) bool __stdcall DXGI_Init(int width, int height)
     hr = dxgiDevice->GetAdapter(&adapter);
     if (FAILED(hr)) {
         DebugLog("DXGI_Init: GetAdapter failed\n");
+        DXGI_Close();
         return false;
     }
 
@@ -60,6 +80,7 @@ extern "C" __declspec(dllexport) bool __stdcall DXGI_Init(int width, int height)
     hr = adapter->EnumOutputs(0, &output);
     if (FAILED(hr)) {
         DebugLog("DXGI_Init: EnumOutputs failed\n");
+        DXGI_Close();
         return false;
     }
 
@@ -67,16 +88,28 @@ extern "C" __declspec(dllexport) bool __stdcall DXGI_Init(int width, int height)
     hr = output.As(&output1);
     if (FAILED(hr)) {
         DebugLog("DXGI_Init: As<IDXGIOutput1> failed\n");
+        DXGI_Close();
         return false;
     }
 
     hr = output1->DuplicateOutput(g_device.Get(), &g_duplication);
     if (FAILED(hr)) {
         DebugLog("DXGI_Init: DuplicateOutput failed\n");
+        DXGI_Close();
         return false;
     }
 
-    // Create a staging texture we'll copy into for CPU-read
+    // Get actual monitor resolution from DXGI
+    DXGI_OUTDUPL_DESC duplDesc;
+    g_duplication->GetDesc(&duplDesc);
+    int width = duplDesc.ModeDesc.Width;
+    int height = duplDesc.ModeDesc.Height;
+
+    char msg[256];
+    snprintf(msg, sizeof(msg), "DXGI_Init: Got monitor resolution %dx%d\n", width, height);
+    DebugLog(msg);
+
+    // Create a staging texture with actual monitor size
     D3D11_TEXTURE2D_DESC desc = {};
     desc.Width = width;
     desc.Height = height;
@@ -91,8 +124,7 @@ extern "C" __declspec(dllexport) bool __stdcall DXGI_Init(int width, int height)
     hr = g_device->CreateTexture2D(&desc, nullptr, &g_staging);
     if (FAILED(hr)) {
         DebugLog("DXGI_Init: CreateTexture2D staging failed\n");
-        // still keep duplication but fail
-        g_duplication.Reset();
+        DXGI_Close();
         return false;
     }
 
@@ -109,44 +141,63 @@ extern "C" __declspec(dllexport) int __stdcall DXGI_GetFrame(unsigned char* dest
     IDXGIResource* desktopResource = nullptr;
     DXGI_OUTDUPL_FRAME_INFO frameInfo = {};
     HRESULT hr = g_duplication->AcquireNextFrame(500, &frameInfo, &desktopResource);
+    
     if (FAILED(hr)) {
         if (hr == DXGI_ERROR_WAIT_TIMEOUT) {
-            return 0;
+            return 0; // No new frame - timeout
         }
         char msg[256];
-        sprintf(msg, "DXGI_GetFrame: AcquireNextFrame failed hr=0x%08x\n", (unsigned)hr);
+        snprintf(msg, sizeof(msg), "DXGI_GetFrame: AcquireNextFrame failed hr=0x%08x\n", (unsigned)hr);
         DebugLog(msg);
-        // If duplication was lost, ask caller to reinit (-2)
+        
+        // If duplication was lost, request reinit (-2)
         if (hr == DXGI_ERROR_ACCESS_LOST || hr == DXGI_ERROR_ACCESS_DENIED || hr == DXGI_ERROR_SESSION_DISCONNECTED) {
-            // release duplication - caller can call DXGI_Init again
             g_duplication.Reset();
-            sprintf(msg, "DXGI_GetFrame: duplication lost, requesting reinit\n");
-            DebugLog(msg);
+            DebugLog("DXGI_GetFrame: duplication lost, requesting reinit\n");
             return -2;
         }
-        return -1;
+        return -1; // Other error
     }
 
+    // Guard: ensure ReleaseFrame is called even if something fails
+    FrameGuard guard(g_duplication.Get());
+    
     ComPtr<ID3D11Texture2D> acquiredTex;
     hr = desktopResource->QueryInterface(__uuidof(ID3D11Texture2D), (void**)acquiredTex.GetAddressOf());
     desktopResource->Release();
+    
     if (FAILED(hr)) {
         DebugLog("DXGI_GetFrame: QueryInterface ID3D11Texture2D failed\n");
-        g_duplication->ReleaseFrame();
-        return 0;
+        return 0; // Guard will release frame
     }
 
+    // Ensure acquired texture has same size as staging. If not, request reinit.
+    D3D11_TEXTURE2D_DESC texDesc;
+    acquiredTex->GetDesc(&texDesc);
+    if ((int)texDesc.Width != g_width || (int)texDesc.Height != g_height) {
+        DebugLog("DXGI_GetFrame: Resolution changed, need reinit\n");
+        return -2; // Duplication lost / size changed - caller should reinit
+    }
+
+    // Copy into staging (may fail if sizes mismatch)
     g_context->CopyResource(g_staging.Get(), acquiredTex.Get());
 
     D3D11_MAPPED_SUBRESOURCE mapped;
     hr = g_context->Map(g_staging.Get(), 0, D3D11_MAP_READ, 0, &mapped);
     if (FAILED(hr)) {
         DebugLog("DXGI_GetFrame: Map failed\n");
-        g_duplication->ReleaseFrame();
-        return 0;
+        return 0; // Guard will release frame
     }
 
+    // Verify buffer is large enough
     int rowSize = g_width * 4;
+    int requiredBytes = g_height * rowSize;
+    if (destLen < requiredBytes) {
+        DebugLog("DXGI_GetFrame: Buffer too small\n");
+        g_context->Unmap(g_staging.Get(), 0);
+        return -3; // Buffer too small
+    }
+
     int bytesCopied = 0;
     unsigned char* srcRow = reinterpret_cast<unsigned char*>(mapped.pData);
     for (int y = 0; y < g_height; y++) {
@@ -161,9 +212,8 @@ extern "C" __declspec(dllexport) int __stdcall DXGI_GetFrame(unsigned char* dest
     }
 
     g_context->Unmap(g_staging.Get(), 0);
-    g_duplication->ReleaseFrame();
 
-    return bytesCopied;
+    return bytesCopied; // Positive = frame copied
 }
 
 extern "C" __declspec(dllexport) void __stdcall DXGI_Close() {
@@ -172,4 +222,13 @@ extern "C" __declspec(dllexport) void __stdcall DXGI_Close() {
     g_context.Reset();
     g_device.Reset();
     g_width = g_height = 0;
+}
+
+extern "C" __declspec(dllexport) void __stdcall DXGI_GetSize(int* w, int* h) {
+    if (w) *w = g_width;
+    if (h) *h = g_height;
+}
+
+extern "C" __declspec(dllexport) bool __stdcall DXGI_IsAlive() {
+    return (g_device.Get() != nullptr) && (g_context.Get() != nullptr) && (g_duplication.Get() != nullptr) && (g_staging.Get() != nullptr);
 }

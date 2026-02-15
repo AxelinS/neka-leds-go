@@ -20,6 +20,8 @@ type LedsManager struct {
 
 	S settings.Settings
 
+	CCC [3]int // Current Cicle Color - RGB
+
 	Points       []Point
 	ScaledPoints []Point
 
@@ -27,7 +29,6 @@ type LedsManager struct {
 	PixelLines  []PixelLine
 	ScaledLines []PixelLine
 
-	Cinema             bool
 	PointsCinema       []Point
 	ScaledPointsCinema []Point
 	LinesCinema        []SampleLine
@@ -191,7 +192,7 @@ func GetValuesColor(r, g, b int, pts int) string {
 }
 
 func (l *LedsManager) GetLedValues(img []byte, w, h int, pts []Point) string {
-	switch l.S.Mode {
+	switch l.S.PixelMethod {
 	case 0:
 		return l.ComputeKernelLEDValues(img, w, h, pts)
 	case 1:
@@ -269,7 +270,7 @@ func (l *LedsManager) ComputeLineLEDValues(
 	sb.Grow(len(l.SampleLines) * 12)
 
 	// computa las lineas del modo cine
-	if l.Cinema {
+	if l.S.Cinema {
 		for _, line := range l.LinesCinema {
 			rs, gs, bs := l.computeLine(line, img)
 			sb.WriteString(strconv.Itoa(rs))

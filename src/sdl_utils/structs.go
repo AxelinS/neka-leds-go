@@ -2,9 +2,9 @@ package sdl_utils
 
 import (
 	"go-neka-leds/src/screen"
+	btn "go-neka-leds/src/sdl_utils/widgets/button"
+	ifield "go-neka-leds/src/sdl_utils/widgets/inputfield"
 	"go-neka-leds/src/utils"
-	. "go-neka-leds/src/utils"
-	"time"
 
 	"github.com/Zyko0/go-sdl3/sdl"
 )
@@ -17,41 +17,13 @@ type WindowConfig struct {
 // Estados del menu
 type MenuState int
 
-// Estructura para botones animados
-type AnimatedButton struct {
-	X, Y          float32
-	Width, Height float32
-	Text          string
-	Color         Color
-	HoverColor    Color
-	IsHovered     bool
-	IsPressed     bool
-	Scale         float32
-	Alpha         float32
-	GlowIntensity float32
-	Action        func()
-}
-
-// Estructura para campos de texto
-type InputField struct {
-	X, Y          float32
-	Width, Height float32
-	Text          string
-	Placeholder   string
-	IsFocused     bool
-	CursorPos     int
-	CursorBlink   time.Time
-	Title         string
-	Type          int8 // 0 texto - 1 combinaciones de teclas
-}
-
 // Estructura principal del menu
 type MenuSystem struct {
 	WindowConfig
 	Led_s          *screen.LedsManager
 	State          MenuState
-	Buttons        map[string]*AnimatedButton
-	InputFields    map[string]*InputField
+	Buttons        map[string]*btn.AnimatedButton
+	InputFields    map[string]*ifield.InputField
 	AnimationTime  float64
 	MouseX, MouseY int32
 	Keys           []bool
@@ -62,7 +34,7 @@ type MenuSystem struct {
 	Blocker        bool
 	Fotogramas     uint32
 
-	VerModo bool
+	Visual bool
 }
 
 type TitleConfig struct {

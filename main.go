@@ -66,10 +66,9 @@ func main() {
 		Pause:           false,
 
 		// settings
-		S:      s,
-		Cinema: false,
-
+		S: s,
 		//
+		CCC: [3]int{0, 0, 0},
 
 		Points:      outer,
 		PixelLines:  pixelLines,
@@ -85,10 +84,25 @@ func main() {
 		defer cap.Close()
 		ticker := time.NewTicker(time.Second / time.Duration(led_s.S.FPS))
 		defer ticker.Stop()
+
 		for range ticker.C {
-			if !led_s.Pause {
-				img := cap.Capture(led_s.S.WinCaptureMode)
-				values := led_s.GetLedValues(img, width, height, outer)
+			if !led_s.Pause && led_s.S.Switch { // Si esta en pausa o apagado no captura ni envia nada
+				var values string
+				switch led_s.S.Mode {
+				case 0:
+					img := cap.Capture(led_s.S.WinCaptureMode)
+					// Skip frame if capture returns nil (timeout or error)
+					if img == nil {
+						continue
+					}
+					values = led_s.GetLedValues(img, width, height, outer)
+				case 1:
+					//values = led_s.GetAudioReactiveValues()
+				case 2:
+					values = screen.GetValuesColor(225, 225, 225, s.LedsCount)
+				default:
+					values = screen.GetValuesColor(255, 255, 255, s.LedsCount)
+				}
 				for _, dev := range devs {
 					if dev.Connected {
 						dev.SafeWrite("RGB " + values + "\n")

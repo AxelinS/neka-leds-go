@@ -1,11 +1,9 @@
 package sdl_utils
 
 import (
-	"fmt"
 	"go-neka-leds/src/screen"
 	"go-neka-leds/src/utils"
 	"strconv"
-	"time"
 
 	"github.com/Zyko0/go-sdl3/sdl"
 )
@@ -58,26 +56,6 @@ func ScalePoints(
 		}
 	}
 	return out
-}
-
-func (m *MenuSystem) ModeTestPoints() {
-	m.Led_s.Pause = !m.Led_s.Pause
-
-	values := screen.GetValuesColor(0, 0, 180, m.Led_s.CountSide.Top)
-	values += screen.GetValuesColor(180, 0, 0, m.Led_s.CountSide.Right)
-	values += screen.GetValuesColor(180, 180, 180, m.Led_s.CountSide.Bottom)
-	values += screen.GetValuesColor(0, 180, 0, m.Led_s.CountSide.Left)
-	// Pintamos de diferente color los leds de cada lado
-	time.Sleep(500 * time.Millisecond)
-	for _, dev := range m.Led_s.Devs {
-		if dev.Connected {
-			dev.SafeWrite("RGB " + values + "\n")
-		} else {
-			if dev.Reconnect() {
-				fmt.Println("[RECONNECTED]", dev.Id)
-			}
-		}
-	}
 }
 
 func (m *MenuSystem) renderPoints(renderer *sdl.Renderer) {
@@ -136,7 +114,7 @@ func (m *MenuSystem) renderPoints(renderer *sdl.Renderer) {
 	renderer.DebugText(float32(spp+20)+left_padding, 85, "Right: "+strconv.Itoa(m.Led_s.CountSide.Right))
 
 	// Mostramos los pixeles del modo cine solo si está activado
-	if m.Led_s.Cinema {
+	if m.Led_s.S.Cinema {
 		for _, p := range m.Led_s.ScaledPointsCinema {
 			renderer.RenderLine(float32(p.X+spp)+left_padding, float32(p.Y)+top_padding, float32(p.X+spp+1)+left_padding, float32(p.Y+1)+top_padding)
 		}
@@ -210,7 +188,7 @@ func (m *MenuSystem) renderLines(renderer *sdl.Renderer) {
 	cBottom := cRight + m.Led_s.CountSide.Bottom
 	cLeft := cBottom + m.Led_s.CountSide.Left
 
-	if m.Led_s.Cinema {
+	if m.Led_s.S.Cinema {
 		for c, line := range m.Led_s.ScaledLinesCinema {
 			if c < cTop {
 				renderer.SetDrawColor(0, 0, 255, 255)

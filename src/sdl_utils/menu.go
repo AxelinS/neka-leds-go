@@ -2,6 +2,8 @@ package sdl_utils
 
 import (
 	"go-neka-leds/src/screen"
+	btn "go-neka-leds/src/sdl_utils/widgets/button"
+	ifield "go-neka-leds/src/sdl_utils/widgets/inputfield"
 	"go-neka-leds/src/settings"
 	"go-neka-leds/src/utils"
 	"math"
@@ -34,7 +36,7 @@ func NewMenuSystem(winConfig WindowConfig, window *sdl.Window, led_settings *scr
 		Blocker:       false,
 		Keys:          make([]bool, 512),
 		Fotogramas:    uint32(60),
-		VerModo:       false,
+		Visual:        false,
 	}
 
 	menu.setupMainMenu()
@@ -43,45 +45,122 @@ func NewMenuSystem(winConfig WindowConfig, window *sdl.Window, led_settings *scr
 
 // Configurar menu principal
 func (m *MenuSystem) setupMainMenu() {
-	m.Buttons = map[string]*AnimatedButton{
+	m.Buttons = map[string]*btn.AnimatedButton{
 		"TestLeds": {
-			X: 10, Y: 50, Width: 150, Height: 50,
-			Text:       "Test Leds",
-			Color:      utils.ColorAzulTron,
+			X: 10, Y: 50, Width: 60, Height: 50,
+			Text:       "Test",
+			Color:      btn.GetBtnColor(false, true),
 			HoverColor: utils.ColorAzulNeon,
 			Scale:      1.0, Alpha: 255,
-			Action: m.ModeTestPoints,
-		},
-		"TestMode": {
-			X: 10, Y: 120, Width: 150, Height: 50,
-			Text:       "Ver modo",
-			Color:      utils.ColorAzulTron,
-			HoverColor: utils.ColorAzulNeon,
-			Scale:      1.0, Alpha: 255,
+			Switch: false,
+			Active: true,
 			Action: func() {
-				m.VerModo = !m.VerModo
+				m.ModeTestPoints()
+				m.Buttons["TestLeds"].Switch = !m.Buttons["TestLeds"].Switch
+				m.Buttons["TestLeds"].UpdateColor()
+			},
+		},
+		"VisualMode": {
+			X: 105, Y: 50, Width: 60, Height: 50,
+			Text:       "Visual",
+			Color:      btn.GetBtnColor(m.Visual, true),
+			HoverColor: utils.ColorAzulNeon,
+			Scale:      1.0, Alpha: 255,
+			Switch: m.Visual,
+			Active: true,
+			Action: func() {
+				m.Visual = !m.Visual
+				m.Buttons["VisualMode"].Switch = m.Visual
+				m.Buttons["VisualMode"].UpdateColor()
 			},
 		},
 		"CinemaMode": {
-			X: 10, Y: 190, Width: 150, Height: 50,
-			Text:       "Modo cine",
-			Color:      utils.ColorAzulTron,
+			X: 10, Y: 120, Width: 60, Height: 50,
+			Text:       "Cine",
+			Color:      btn.GetBtnColor(m.Led_s.S.Cinema, true),
 			HoverColor: utils.ColorAzulNeon,
 			Scale:      1.0, Alpha: 255,
+			Switch: m.Led_s.S.Cinema,
+			Active: true,
 			Action: func() {
-				m.Led_s.Cinema = !m.Led_s.Cinema
+				m.Led_s.S.Cinema = !m.Led_s.S.Cinema
+				settings.SaveSettings(m.Led_s.S)
+				m.Buttons["CinemaMode"].Switch = m.Led_s.S.Cinema
+				m.Buttons["CinemaMode"].UpdateColor()
 			},
 		},
-		"Config": {
-			X: 10, Y: 260, Width: 150, Height: 50,
-			Text:       "Configuracion",
-			Color:      utils.ColorAzulTron,
+		// Modos de leds
+		"ScreenMode": {
+			X: 8, Y: 200, Width: 60, Height: 50,
+			Text:       "Screen",
+			Color:      btn.GetBtnColor(m.GetBtnModeActive("Screen"), m.GetBtnModeActive("Screen")),
 			HoverColor: utils.ColorAzulNeon,
+			Scale:      0.0, Alpha: 255,
+			Switch: m.GetBtnModeActive("Screen"),
+			Active: m.GetBtnModeActive("Screen"),
+			Action: func() {
+				m.Led_s.S.Mode = 0 // Modo screen capture
+				settings.SaveSettings(m.Led_s.S)
+				m.UpdateModeBtns()
+			},
+		},
+		"AudioMode": {
+			X: 70, Y: 200, Width: 60, Height: 50,
+			Text:       "Audio",
+			Color:      btn.GetBtnColor(m.GetBtnModeActive("Audio"), m.GetBtnModeActive("Audio")),
+			HoverColor: utils.ColorAzulNeon,
+			Scale:      0.0, Alpha: 255,
+			Switch: m.GetBtnModeActive("Audio"),
+			Active: m.GetBtnModeActive("Audio"),
+			Action: func() {
+				m.Led_s.S.Mode = 1 // Modo audio reactive
+				settings.SaveSettings(m.Led_s.S)
+				m.UpdateModeBtns()
+			},
+		},
+		"StaticMode": {
+			X: 132, Y: 200, Width: 60, Height: 50,
+			Text:       "Static",
+			Color:      btn.GetBtnColor(m.GetBtnModeActive("Static"), m.GetBtnModeActive("Static")),
+			HoverColor: utils.ColorAzulNeon,
+			Scale:      0.0, Alpha: 255,
+			Switch: m.GetBtnModeActive("Static"),
+			Active: m.GetBtnModeActive("Static"),
+			Action: func() {
+				m.Led_s.S.Mode = 2 // Modo static
+				settings.SaveSettings(m.Led_s.S)
+				m.UpdateModeBtns()
+			},
+		},
+		//
+		"Config": {
+			X: 10, Y: 280, Width: 150, Height: 50,
+			Text:       "Configuracion",
+			Color:      btn.ColorAzulTronOff,
+			HoverColor: btn.ColorAzulTronOn,
 			Scale:      1.0, Alpha: 255,
+			Switch: true,
+			Active: true,
 			Action: m.openConfigMenu,
 		},
+		"Leds": {
+			X: 10, Y: 340, Width: 60, Height: 50,
+			Text:       "Leds",
+			Color:      btn.ColorAzulTronOn,
+			HoverColor: utils.ColorAzulNeon,
+			Scale:      1.0, Alpha: 255,
+			Switch: true,
+			Active: true,
+			Action: func() {
+				m.Led_s.S.Switch = !m.Led_s.S.Switch
+				m.TurnOff()
+				m.Buttons["Leds"].Switch = m.Led_s.S.Switch
+				m.Buttons["Leds"].UpdateColor()
+				settings.SaveSettings(m.Led_s.S)
+			},
+		},
 	}
-	m.InputFields = map[string]*InputField{}
+	m.InputFields = map[string]*ifield.InputField{}
 }
 
 func (m *MenuSystem) ParseCaptureMode() string {
@@ -124,7 +203,7 @@ func (m *MenuSystem) ChangeStartPoint() {
 
 // Configurar menu de configuracion
 func (m *MenuSystem) setupConfigMenu() {
-	m.Buttons = map[string]*AnimatedButton{
+	m.Buttons = map[string]*btn.AnimatedButton{
 		"BackMenu": {
 			X: 180, Y: 5, Width: 55, Height: 28,
 			Text:       "Menu",
@@ -148,7 +227,7 @@ func (m *MenuSystem) setupConfigMenu() {
 			Action:     m.ChangeStartPoint,
 		},
 	}
-	m.InputFields = map[string]*InputField{
+	m.InputFields = map[string]*ifield.InputField{
 		"FPS": {
 			X: 10, Y: 330, Width: 70, Height: 40,
 			Text:        strconv.FormatInt(int64(m.Led_s.S.FPS), 10),
@@ -217,7 +296,7 @@ func (m *MenuSystem) Update(deltaTime float64) {
 		btn := m.Buttons[i]
 		// Animacion de hover
 		if m.Buttons[i].IsHovered {
-			btn.Scale = float32(1.0 + 0.1*math.Sin(m.AnimationTime*8))
+			btn.Scale = float32(0.9 + 0.05*math.Sin(m.AnimationTime*2))
 			btn.GlowIntensity = float32(0.5 + 0.3*math.Sin(m.AnimationTime*4))
 		} else {
 			btn.Scale = 1.0
@@ -266,25 +345,35 @@ func (m *MenuSystem) renderMainMenu(renderer *sdl.Renderer) {
 	if m.Led_s.Pause {
 		statusTest = "ON"
 	}
-	statusModo := "OFF"
-	if m.VerModo {
-		statusModo = "ON"
+	statusVisual := "OFF"
+	if m.Visual {
+		statusVisual = "ON"
 	}
 	statusCine := "OFF"
-	if m.Led_s.Cinema {
+	if m.Led_s.S.Cinema {
 		statusCine = "ON"
+	}
+
+	statusSwitch := "OFF"
+	if m.Led_s.S.Switch {
+		statusSwitch = "ON"
 	}
 	glowIntensity := float32(0)
 
+	renderer.DebugText(85, 183, "Mode")
+
 	// Indicador de los estados de botones
-	m.renderStatusIndicator(renderer, 180, 62, m.Led_s.Pause, glowIntensity) // Test leds
-	renderer.DebugText(170, 80, statusTest)
+	m.renderStatusIndicator(renderer, 88, 62, m.Led_s.Pause, glowIntensity) // Test leds
+	renderer.DebugText(78, 80, statusTest)
 
-	m.renderStatusIndicator(renderer, 180, 127, m.VerModo, glowIntensity) // Ver modo
-	renderer.DebugText(170, 155, statusModo)
+	m.renderStatusIndicator(renderer, 180, 62, m.Visual, glowIntensity) // Ver modo
+	renderer.DebugText(170, 80, statusVisual)
 
-	m.renderStatusIndicator(renderer, 180, 197, m.Led_s.Cinema, glowIntensity) // Modo cine
-	renderer.DebugText(170, 225, statusCine)
+	m.renderStatusIndicator(renderer, 88, 135, m.Led_s.S.Cinema, glowIntensity) // Modo cine
+	renderer.DebugText(78, 155, statusCine)
+
+	m.renderStatusIndicator(renderer, 88, 355, m.Led_s.S.Switch, glowIntensity) // Leds encendidos o apagados
+	renderer.DebugText(78, 375, statusSwitch)
 
 	// Renderizar botones
 	for _, btn := range m.Buttons {
@@ -296,7 +385,7 @@ func (m *MenuSystem) renderMainMenu(renderer *sdl.Renderer) {
 	}
 
 	// Vista previa de puntos
-	if m.VerModo {
+	if m.Visual {
 		m.renderLines(renderer)
 	} else {
 		m.renderPoints(renderer)
@@ -334,7 +423,7 @@ func (m *MenuSystem) renderConfigMenu(renderer *sdl.Renderer) {
 }
 
 // Renderizar boton animado
-func (m *MenuSystem) renderAnimatedButton(renderer *sdl.Renderer, btn AnimatedButton) {
+func (m *MenuSystem) renderAnimatedButton(renderer *sdl.Renderer, btn btn.AnimatedButton) {
 	// Calcular posicion y tamaño con escala
 	scaledW := btn.Width * btn.Scale
 	scaledH := btn.Height * btn.Scale
@@ -394,7 +483,7 @@ func (m *MenuSystem) renderAnimatedButton(renderer *sdl.Renderer, btn AnimatedBu
 }
 
 // Renderizar campo de entrada de texto
-func (m *MenuSystem) renderInputField(renderer *sdl.Renderer, field InputField) {
+func (m *MenuSystem) renderInputField(renderer *sdl.Renderer, field ifield.InputField) {
 	// Fondo del campo
 	bgColor := utils.ColorAzulOscuro
 	if field.IsFocused {
@@ -564,13 +653,13 @@ func (m *MenuSystem) HandleMouseClick(x, y int32, pressed bool) {
 }
 
 // Verificar si un punto esta dentro de un boton
-func (m *MenuSystem) isPointInButton(x, y int32, btn AnimatedButton) bool {
+func (m *MenuSystem) isPointInButton(x, y int32, btn btn.AnimatedButton) bool {
 	return float32(x) >= btn.X && float32(x) <= btn.X+btn.Width &&
 		float32(y) >= btn.Y && float32(y) <= btn.Y+btn.Height
 }
 
 // Verificar si un punto esta dentro de un campo de entrada
-func (m *MenuSystem) isPointInInputField(x, y int32, field InputField) bool {
+func (m *MenuSystem) isPointInInputField(x, y int32, field ifield.InputField) bool {
 	return float32(x) >= field.X && float32(x) <= field.X+field.Width &&
 		float32(y) >= field.Y && float32(y) <= field.Y+field.Height
 }

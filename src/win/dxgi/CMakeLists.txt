@@ -9,11 +9,13 @@ add_library(dxgi_capture SHARED dxgi_capture.cpp)
 
 target_compile_features(dxgi_capture PRIVATE cxx_std_17)
 
-find_library(D3D11_LIB d3d11)
-find_library(DXGI_LIB dxgi)
+# Link with Direct3D and DXGI libraries
+# On MSVC, these are found in the Windows SDK
+target_link_libraries(dxgi_capture PRIVATE d3d11 dxgi)
 
-target_link_libraries(dxgi_capture PRIVATE ${D3D11_LIB} ${DXGI_LIB})
-
+# Output DLL directly to src/win/ directory
 set_target_properties(dxgi_capture PROPERTIES
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/.."
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/../"
+    RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_SOURCE_DIR}/../"
+    RUNTIME_OUTPUT_DIRECTORY_DEBUG "${CMAKE_SOURCE_DIR}/../"
 )
