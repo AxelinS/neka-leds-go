@@ -6,30 +6,55 @@ import (
 	"go-neka-leds/src/screen"
 	"go-neka-leds/src/sdl_utils"
 	"go-neka-leds/src/settings"
+	"go-neka-leds/src/utils"
 	"go-neka-leds/src/win"
-	"time"
 )
 
 func main() {
-
 	s := settings.InitializeSettings()
 
 	if s.Brightness < 0 || s.Brightness > 1 {
 		s.Brightness = 0.4
 	}
-	if s.FPS <= 0 {
+	if s.FPS <= 0 || s.FPS > 240 {
 		s.FPS = 30
+	}
+	if s.LineThickness < 1 || s.LineThickness > 20 {
+		s.LineThickness = 3
+	}
+	if s.CinePaddingY < 0 || s.CinePaddingY > 1000 {
+		s.CinePaddingY = 200
+	}
+	if s.LedsCount < 1 || s.LedsCount > 999 {
+		s.LedsCount = 1
+	}
+	if s.PixelMethod < 0 || s.PixelMethod > 2 {
+		s.PixelMethod = 0
+	}
+	if s.KernelSize < 1 || s.KernelSize > 15 {
+		s.KernelSize = 3
+	}
+	if s.Padding < 1 || s.Padding > 800 {
+		s.Padding = 1
 	}
 
 	fmt.Println("Buscando ESP32...")
+	wifidevs := esp32.ESP32WIFI{IP: s.IP, Port: s.Port}
+	if s.UsingWifi {
+		fmt.Printf("Intentando conectar al ESP32 por Wifi en %s:%s...\n", s.IP, s.Port)
+		wd, err := esp32.ConnectESP32Wifi(s.IP, s.Port)
+		if err != nil || wd.Conn == nil {
+			fmt.Println("No se pudo conectar al ESP32 por Wifi")
+		}
+		wifidevs.Conn = wd.Conn
+		wifidevs.Connected = true
+		fmt.Println("Usando Wifi para controlar los LEDs")
+	}
 	devs := esp32.DiscoverESP32()
 	if len(devs) == 0 {
-		fmt.Println("No se encontraron ESP32")
+		fmt.Println("No se encontraron ESP32 conectados por USB")
 	}
-	fmt.Printf("Se encontraron %v dispositivos\n", len(devs))
-	for i, d := range devs {
-		fmt.Printf("%v:%v\n", i, d.Id)
-	}
+	fmt.Printf("Se encontraron %d ESP32 conectados por USB\n", len(devs))
 
 	_, _, width, height := win.GetPrimaryMonitor()
 	if s.Padding < 1 || s.Padding > height/3 {
@@ -58,12 +83,19 @@ func main() {
 		s.LineThickness,
 	)
 
+	chn := utils.Canales{
+		Suspended: make(chan bool, 2),
+		Stop:      make(chan struct{}),
+	}
 	// Inicializa el gestor de leds
 	led_s := screen.LedsManager{
+		Chn:             &chn,
 		Devs:            devs,
+		WifiDev:         &wifidevs,
 		MonitorSettings: screen.MonitorSettings{Width: width, Height: height},
 		CountSide:       screen.CountSides(outer, width, height, s.Padding),
 		Pause:           false,
+		Suspend:         false,
 
 		// settings
 		S: s,
@@ -79,41 +111,23 @@ func main() {
 		LinesCinema:  screen.PixelLinesToSampleLines(pixelLinesCine, width),
 	}
 
-	go func() {
-		cap := win.NewScreenCapturer(width, height)
-		defer cap.Close()
-		ticker := time.NewTicker(time.Second / time.Duration(led_s.S.FPS))
-		defer ticker.Stop()
+	cap := win.NewScreenCapturer(led_s.Width, led_s.Height)
+	defer cap.Close()
 
-		for range ticker.C {
-			if !led_s.Pause && led_s.S.Switch { // Si esta en pausa o apagado no captura ni envia nada
-				var values string
-				switch led_s.S.Mode {
-				case 0:
-					img := cap.Capture(led_s.S.WinCaptureMode)
-					// Skip frame if capture returns nil (timeout or error)
-					if img == nil {
-						continue
-					}
-					values = led_s.GetLedValues(img, width, height, outer)
-				case 1:
-					//values = led_s.GetAudioReactiveValues()
-				case 2:
-					values = screen.GetValuesColor(225, 225, 225, s.LedsCount)
-				default:
-					values = screen.GetValuesColor(255, 255, 255, s.LedsCount)
-				}
-				for _, dev := range devs {
-					if dev.Connected {
-						dev.SafeWrite("RGB " + values + "\n")
-					} else {
-						if dev.Reconnect() {
-							fmt.Println("[RECONNECTED]", dev.Id)
-						}
-					}
-				}
-			}
-		}
+	go func() {
+		win.StartWindowsEvents(&chn)
+	}()
+
+	go func() {
+		StartSuspendManager(&led_s, &chn, cap)
+	}()
+
+	go func() {
+		StartAutoReconnect(&led_s, &chn)
+	}()
+
+	go func() {
+		StartLedsSenderManager(&led_s, &chn, cap)
 	}()
 
 	sdl_utils.WindowLoop(&led_s)

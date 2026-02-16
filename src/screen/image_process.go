@@ -1,53 +1,10 @@
 package screen
 
 import (
-	"go-neka-leds/src/esp32"
-	"go-neka-leds/src/settings"
 	"math"
 	"strconv"
 	"strings"
 )
-
-type MonitorSettings struct {
-	Width, Height int
-}
-
-type LedsManager struct {
-	Devs []esp32.ESP32
-	MonitorSettings
-	CountSide SideCount
-	Pause     bool
-
-	S settings.Settings
-
-	CCC [3]int // Current Cicle Color - RGB
-
-	Points       []Point
-	ScaledPoints []Point
-
-	SampleLines []SampleLine
-	PixelLines  []PixelLine
-	ScaledLines []PixelLine
-
-	PointsCinema       []Point
-	ScaledPointsCinema []Point
-	LinesCinema        []SampleLine
-	PixelCinema        []PixelLine
-	ScaledLinesCinema  []PixelLine
-}
-
-type Side int
-
-const (
-	Top Side = iota
-	Right
-	Bottom
-	Left
-)
-
-type SampleLine struct {
-	Offsets []int
-}
 
 // Reinicia todos los valores de los puntos, lineas y escalas.
 func (l *LedsManager) Restart() {
@@ -191,7 +148,17 @@ func GetValuesColor(r, g, b int, pts int) string {
 	return sb.String()
 }
 
-func (l *LedsManager) GetLedValues(img []byte, w, h int, pts []Point) string {
+func GetValues(r, g, b int, pts int) []byte {
+	frame := make([]byte, pts*3)
+	for i := range pts {
+		frame[i*3] = byte(r)
+		frame[i*3+1] = byte(g)
+		frame[i*3+2] = byte(b)
+	}
+	return frame
+}
+
+func (l *LedsManager) GetLedValues(img []byte, w, h int, pts []Point) []byte {
 	switch l.S.PixelMethod {
 	case 0:
 		return l.ComputeKernelLEDValues(img, w, h, pts)
@@ -202,46 +169,34 @@ func (l *LedsManager) GetLedValues(img []byte, w, h int, pts []Point) string {
 	}
 }
 
-func (l *LedsManager) ComputeSimpleLEDValues(img []byte, w, h int, pts []Point) string {
-	var sb strings.Builder
-	sb.Grow(len(pts) * 12)
-
-	for _, p := range pts {
+func (l *LedsManager) ComputeSimpleLEDValues(img []byte, w, h int, pts []Point) []byte {
+	frame := make([]byte, len(pts)*3)
+	for i, p := range pts {
 		idx := (p.Y*w + p.X) * 4
 		b := int(img[idx])
 		g := int(img[idx+1])
 		r := int(img[idx+2])
 
-		r, g, b = AdjustTemperature(r, g, b, l.S.Temperature)
-		r, g, b = AdjustBrightness(r, g, b, l.S.Brightness)
+		r, g, b = AdjustColorCalibration(r, g, b, l.S.RCal, l.S.GCal, l.S.BCal, l.S.Temperature, l.S.Brightness, l.S.Saturation, l.S.Gamma)
 
-		sb.WriteString(strconv.Itoa(r))
-		sb.WriteByte('-')
-		sb.WriteString(strconv.Itoa(g))
-		sb.WriteByte('-')
-		sb.WriteString(strconv.Itoa(b))
-		sb.WriteByte(' ')
+		frame[i*3] = byte(r)
+		frame[i*3+1] = byte(g)
+		frame[i*3+2] = byte(b)
 	}
-	return sb.String()
+	return frame
 }
 
-func (l *LedsManager) ComputeKernelLEDValues(img []byte, w, h int, pts []Point) string {
-	var sb strings.Builder
-	sb.Grow(len(pts) * 12)
-
-	for _, p := range pts {
+func (l *LedsManager) ComputeKernelLEDValues(img []byte, w, h int, pts []Point) []byte {
+	frame := make([]byte, len(pts)*3)
+	for i, p := range pts {
 		r, g, b := l.AvgColorKernel(img, w, h, p.X, p.Y)
-		r, g, b = AdjustTemperature(r, g, b, l.S.Temperature)
-		r, g, b = AdjustBrightness(r, g, b, l.S.Brightness)
+		r, g, b = AdjustColorCalibration(r, g, b, l.S.RCal, l.S.GCal, l.S.BCal, l.S.Temperature, l.S.Brightness, l.S.Saturation, l.S.Gamma)
 
-		sb.WriteString(strconv.Itoa(r))
-		sb.WriteByte('-')
-		sb.WriteString(strconv.Itoa(g))
-		sb.WriteByte('-')
-		sb.WriteString(strconv.Itoa(b))
-		sb.WriteByte(' ')
+		frame[i*3] = byte(r)
+		frame[i*3+1] = byte(g)
+		frame[i*3+2] = byte(b)
 	}
-	return sb.String()
+	return frame
 }
 
 func (l *LedsManager) computeLine(line SampleLine, img []byte) (int, int, int) {
@@ -257,43 +212,31 @@ func (l *LedsManager) computeLine(line SampleLine, img []byte) (int, int, int) {
 		gs /= n
 		bs /= n
 	}
-	rs, gs, bs = AdjustTemperature(rs, gs, bs, l.S.Temperature)
-	rs, gs, bs = AdjustBrightness(rs, gs, bs, l.S.Brightness)
+	rs, gs, bs = AdjustColorCalibration(rs, gs, bs, l.S.RCal, l.S.GCal, l.S.BCal, l.S.Temperature, l.S.Brightness, l.S.Saturation, l.S.Gamma)
 	return rs, gs, bs
 }
 
 func (l *LedsManager) ComputeLineLEDValues(
 	img []byte,
-) string {
-
-	var sb strings.Builder
-	sb.Grow(len(l.SampleLines) * 12)
-
+) []byte {
+	frame := make([]byte, len(l.LinesCinema)*3)
 	// computa las lineas del modo cine
 	if l.S.Cinema {
-		for _, line := range l.LinesCinema {
+		for i, line := range l.LinesCinema {
 			rs, gs, bs := l.computeLine(line, img)
-			sb.WriteString(strconv.Itoa(rs))
-			sb.WriteByte('-')
-			sb.WriteString(strconv.Itoa(gs))
-			sb.WriteByte('-')
-			sb.WriteString(strconv.Itoa(bs))
-			sb.WriteByte(' ')
+			frame[i*3] = byte(rs)
+			frame[i*3+1] = byte(gs)
+			frame[i*3+2] = byte(bs)
 		}
-		return sb.String()
+		return frame
 	}
-
-	for _, line := range l.SampleLines {
+	for i, line := range l.SampleLines {
 		rs, gs, bs := l.computeLine(line, img)
-		sb.WriteString(strconv.Itoa(rs))
-		sb.WriteByte('-')
-		sb.WriteString(strconv.Itoa(gs))
-		sb.WriteByte('-')
-		sb.WriteString(strconv.Itoa(bs))
-		sb.WriteByte(' ')
+		frame[i*3] = byte(rs)
+		frame[i*3+1] = byte(gs)
+		frame[i*3+2] = byte(bs)
 	}
-
-	return sb.String()
+	return frame
 }
 
 func (l *LedsManager) AvgColorKernel(
@@ -339,27 +282,106 @@ func clamp(v int) int {
 	return v
 }
 
-func AdjustTemperature(r, g, b int, t float64) (int, int, int) {
-	if t > 1 {
-		t = 1
-	} else if t < -1 {
-		t = -1
+// clampF restringe un valor float a un rango mínimo y máximo
+func clampF(v, min, max float64) float64 {
+	if v < min {
+		return min
 	}
-	var rGain, gGain, bGain float64
-	if t >= 0 {
-		rGain = 1.0 + 0.6*t
-		gGain = 1.0 - 0.1*t
-		bGain = 1.0 - 0.8*t
-	} else {
-		rGain = 1.0 + 0.5*t
-		gGain = 1.0 - 0.1*t
-		bGain = 1.0 - 0.2*t
+	if v > max {
+		return max
 	}
-	return clamp(int(float64(r) * rGain)),
-		clamp(int(float64(g) * gGain)),
-		clamp(int(float64(b) * bGain))
+	return v
 }
 
+// AdjustColorCalibration aplica calibración RGB profesional en 3 pasos
+//
+// Paso 1: RGB Gains (ganancias independientes)
+//
+//	R_out = R_in * gain_R
+//	G_out = G_in * gain_G
+//	B_out = B_in * gain_B
+//	Corrige: diferencias de brillo entre LEDs, dominantes de color, desbalance del panel
+//
+// Paso 2: Corrección de Temperatura de Color (CT)
+//
+//	Rango: -1.0 (frío/azul) a +1.0 (cálido/rojo)
+//	Solo afecta R y B inversamente, manteniendo G estable
+//	Simula cambios en Kelvin (ej: 3000K a 6500K)
+//
+// Paso 3: Brillo
+//
+//	Multiplicador final que aplica a todos los canales
+//
+// Método estándar en monitores profesionales, calibradores de cámara y postproducción
+func AdjustColorCalibration(r, g, b int, rCal, gCal, bCal, temperature, brightness, saturation, gamma float64) (int, int, int) {
+	rF := float64(r)
+	gF := float64(g)
+	bF := float64(b)
+
+	// === PASO 1: Aplicar ganancias RGB independientes ===
+	rF = rF * rCal
+	gF = gF * gCal
+	bF = bF * bCal
+
+	// === PASO 2: Aplicar corrección de temperatura de color ===
+	temp := clampF(temperature, -1.0, 1.0)
+	if temp >= 0 {
+		rF = rF * (1.0 + temp*0.5)
+		bF = bF * (1.0 - temp*0.8)
+	} else {
+		rF = rF * (1.0 + temp*0.3)
+		bF = bF * (1.0 - temp*0.5)
+	}
+
+	// === PASO 3: Aplicar brillo ===
+	rF = rF * brightness
+	gF = gF * brightness
+	bF = bF * brightness
+
+	// === PASO 4: Ajuste de saturación (en espacio RGB lineal aproximado) ===
+	// Normalizar a [0,1]
+	rn := clampFloat(rF/255.0, 0.0, 1.0)
+	gn := clampFloat(gF/255.0, 0.0, 1.0)
+	bn := clampFloat(bF/255.0, 0.0, 1.0)
+
+	// Luminancia aproximada (Rec.709)
+	lum := 0.2126*rn + 0.7152*gn + 0.0722*bn
+	sat := clampF(saturation, 0.0, 4.0)
+	rn = lum + (rn-lum)*sat
+	gn = lum + (gn-lum)*sat
+	bn = lum + (bn-lum)*sat
+
+	// === PASO 5: Corrección gamma de salida ===
+	gCorr := gamma
+	if gCorr <= 0 {
+		gCorr = 2.2
+	}
+	// Aplicar gamma (convertir lineal a espacio perceptual)
+	rn = clampFloat(math.Pow(clampFloat(rn, 0.0, 1.0), 1.0/gCorr), 0.0, 1.0)
+	gn = clampFloat(math.Pow(clampFloat(gn, 0.0, 1.0), 1.0/gCorr), 0.0, 1.0)
+	bn = clampFloat(math.Pow(clampFloat(bn, 0.0, 1.0), 1.0/gCorr), 0.0, 1.0)
+
+	return clamp(int(rn * 255.0)), clamp(int(gn * 255.0)), clamp(int(bn * 255.0))
+}
+
+// clampFloat limita un float en un rango
+func clampFloat(v, min, max float64) float64 {
+	if v < min {
+		return min
+	}
+	if v > max {
+		return max
+	}
+	return v
+}
+
+// AdjustTemperature (deprecado) - mantener por compatibilidad
+func AdjustTemperature(r, g, b int, t float64) (int, int, int) {
+	// Usar calibración por defecto (1.0 para cada canal)
+	return AdjustColorCalibration(r, g, b, 1.0, 1.0, 1.0, t, 1.0, 1.0, 2.2)
+}
+
+// AdjustBrightness (deprecado) - mantener por compatibilidad
 func AdjustBrightness(r, g, b int, a float64) (int, int, int) {
 	return int(float64(r) * a), int(float64(g) * a), int(float64(b) * a)
 }

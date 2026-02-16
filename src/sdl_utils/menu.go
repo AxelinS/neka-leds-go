@@ -4,6 +4,7 @@ import (
 	"go-neka-leds/src/screen"
 	btn "go-neka-leds/src/sdl_utils/widgets/button"
 	ifield "go-neka-leds/src/sdl_utils/widgets/inputfield"
+	slider "go-neka-leds/src/sdl_utils/widgets/slider"
 	"go-neka-leds/src/settings"
 	"go-neka-leds/src/utils"
 	"math"
@@ -37,6 +38,7 @@ func NewMenuSystem(winConfig WindowConfig, window *sdl.Window, led_settings *scr
 		Keys:          make([]bool, 512),
 		Fotogramas:    uint32(60),
 		Visual:        false,
+		Sliders:       make(map[string]*slider.Slider),
 	}
 
 	menu.setupMainMenu()
@@ -152,8 +154,7 @@ func (m *MenuSystem) setupMainMenu() {
 			Switch: true,
 			Active: true,
 			Action: func() {
-				m.Led_s.S.Switch = !m.Led_s.S.Switch
-				m.TurnOff()
+				m.Led_s.LedsSwitch()
 				m.Buttons["Leds"].Switch = m.Led_s.S.Switch
 				m.Buttons["Leds"].UpdateColor()
 				settings.SaveSettings(m.Led_s.S)
@@ -213,7 +214,7 @@ func (m *MenuSystem) setupConfigMenu() {
 			Action: m.backToMainMenu,
 		},
 		"CaptureMode": {
-			X: 10, Y: 240, Width: 80, Height: 40,
+			X: 100, Y: 240, Width: 80, Height: 40,
 			Text:       "Capture",
 			Color:      utils.ColorAzulTron,
 			HoverColor: utils.ColorAzulNeon,
@@ -226,27 +227,28 @@ func (m *MenuSystem) setupConfigMenu() {
 			HoverColor: utils.ColorAzulNeon,
 			Action:     m.ChangeStartPoint,
 		},
+		"UsingWifi": {
+			X: 220, Y: 320, Width: 40, Height: 40,
+			Text:       "Wifi",
+			Color:      btn.GetBtnColor(m.Led_s.S.UsingWifi, m.Led_s.S.UsingWifi),
+			HoverColor: utils.ColorAzulNeon,
+			Active:     m.Led_s.S.UsingWifi,
+			Switch:     true,
+			Action: func() {
+				m.Led_s.S.UsingWifi = !m.Led_s.S.UsingWifi
+				settings.SaveSettings(m.Led_s.S)
+				m.Led_s.WifiDev.Reconnect()
+				m.Buttons["UsingWifi"].Active = m.Led_s.S.UsingWifi
+				m.Buttons["UsingWifi"].UpdateColor()
+			},
+		},
 	}
 	m.InputFields = map[string]*ifield.InputField{
-		"FPS": {
-			X: 10, Y: 330, Width: 70, Height: 40,
-			Text:        strconv.FormatInt(int64(m.Led_s.S.FPS), 10),
-			Placeholder: "FPS",
-			Title:       "FPS",
-			Type:        0,
-		},
 		"LedsCount": {
 			X: 10, Y: 120, Width: 70, Height: 40,
 			Text:        strconv.FormatInt(int64(m.Led_s.S.LedsCount), 10),
 			Placeholder: "Leds",
 			Title:       "Leds_count",
-			Type:        0,
-		},
-		"Temperature": {
-			X: 10, Y: 180, Width: 70, Height: 40,
-			Text:        strconv.FormatFloat(m.Led_s.S.Temperature, 'f', 2, 64),
-			Placeholder: "Temp",
-			Title:       "Temperature",
 			Type:        0,
 		},
 		"Padding": {
@@ -277,13 +279,60 @@ func (m *MenuSystem) setupConfigMenu() {
 			Title:       "LineThick",
 			Type:        0,
 		},
-		"Brightness": {
-			X: 280, Y: 180, Width: 70, Height: 40,
-			Text:        strconv.FormatFloat(m.Led_s.S.Brightness, 'f', 2, 64),
-			Placeholder: "Brightness",
-			Title:       "Brightness",
+		"FPS": {
+			X: 10, Y: 240, Width: 60, Height: 40,
+			Text:        strconv.FormatInt(int64(m.Led_s.S.FPS), 10),
+			Placeholder: "FPS",
+			Title:       "FPS",
 			Type:        0,
 		},
+		"IP": {
+			X: 10, Y: 320, Width: 140, Height: 40,
+			Text:        m.Led_s.S.IP,
+			Placeholder: "IP",
+			Title:       "IP",
+			Type:        0,
+		},
+		"PORT": {
+			X: 160, Y: 320, Width: 40, Height: 40,
+			Text:        m.Led_s.S.Port,
+			Placeholder: "PORT",
+			Title:       "PORT",
+			Type:        0,
+		},
+	}
+
+	m.Sliders = map[string]*slider.Slider{
+		"RCal":        slider.NewSlider(300, 60, 100, 20, 0.1, 2.0, m.Led_s.S.RCal, "Red Gain"),
+		"GCal":        slider.NewSlider(300, 120, 100, 20, 0.1, 2.0, m.Led_s.S.GCal, "Green Gain"),
+		"BCal":        slider.NewSlider(300, 180, 100, 20, 0.1, 2.0, m.Led_s.S.BCal, "Blue Gain"),
+		"Temperature": slider.NewSlider(300, 240, 100, 20, -1.0, 1.0, m.Led_s.S.Temperature, "Color Temp"),
+		"Brightness":  slider.NewSlider(300, 300, 100, 20, 0.0, 1.0, m.Led_s.S.Brightness, "Brightness"),
+		"Saturation":  slider.NewSlider(300, 360, 100, 20, 0.0, 2.0, m.Led_s.S.Saturation, "Saturation"),
+		"Gamma":       slider.NewSlider(300, 420, 100, 20, 0.1, 4.0, m.Led_s.S.Gamma, "Gamma"),
+	}
+
+	// Configurar callbacks para guardar cambios
+	for name, sldr := range m.Sliders {
+		sldr.OnChange = func() {
+			switch name {
+			case "RCal":
+				m.Led_s.S.RCal = sldr.Value
+			case "GCal":
+				m.Led_s.S.GCal = sldr.Value
+			case "BCal":
+				m.Led_s.S.BCal = sldr.Value
+			case "Temperature":
+				m.Led_s.S.Temperature = sldr.Value
+			case "Brightness":
+				m.Led_s.S.Brightness = sldr.Value
+			case "Saturation":
+				m.Led_s.S.Saturation = sldr.Value
+			case "Gamma":
+				m.Led_s.S.Gamma = sldr.Value
+			}
+			settings.SaveSettings(m.Led_s.S)
+		}
 	}
 }
 
@@ -411,6 +460,11 @@ func (m *MenuSystem) renderConfigMenu(renderer *sdl.Renderer) {
 		m.renderInputField(renderer, *field)
 	}
 
+	// Renderizar sliders
+	for name, sldr := range m.Sliders {
+		m.renderSlider(renderer, *sldr, name)
+	}
+
 	// Renderizar botones (flecha de retorno)
 	for _, btn := range m.Buttons {
 		m.renderAnimatedButton(renderer, *btn)
@@ -418,8 +472,10 @@ func (m *MenuSystem) renderConfigMenu(renderer *sdl.Renderer) {
 
 	// Indicador de los estados de botones
 	renderer.DebugText(100, 70, m.ParseStartPoint())   // punto comienzo
-	renderer.DebugText(100, 250, m.ParseCaptureMode()) // modo captura
+	renderer.DebugText(190, 250, m.ParseCaptureMode()) // modo captura
 
+	renderer.DebugText(10, 290, "Wifi")
+	renderer.DebugText(152, 330, ":")
 }
 
 // Renderizar boton animado
@@ -530,6 +586,43 @@ func (m *MenuSystem) renderInputField(renderer *sdl.Renderer, field ifield.Input
 	}
 }
 
+// Renderizar slider
+func (m *MenuSystem) renderSlider(renderer *sdl.Renderer, sldr slider.Slider, name string) {
+	// Fondo de la barra
+	renderer.SetDrawColor(sldr.BarColor.R, sldr.BarColor.G, sldr.BarColor.B, sldr.BarColor.A)
+	barRect := sdl.FRect{X: sldr.X, Y: sldr.Y, W: sldr.Width, H: sldr.Height}
+	renderer.RenderFillRect(&barRect)
+
+	// Borde de la barra
+	renderer.SetDrawColor(utils.ColorGris.R, utils.ColorGris.G, utils.ColorGris.B, 200)
+	renderer.RenderRect(&barRect)
+
+	// Thumb (parte movible)
+	thumbX := sldr.GetThumbPosition()
+	thumbColor := sldr.ThumbColor
+	if sldr.IsHovered || sldr.IsFocused {
+		thumbColor = sldr.ThumbHoverColor
+	}
+
+	renderer.SetDrawColor(thumbColor.R, thumbColor.G, thumbColor.B, thumbColor.A)
+	thumbRect := sdl.FRect{X: thumbX - sldr.Height/2, Y: sldr.Y, W: sldr.Height, H: sldr.Height}
+	renderer.RenderFillRect(&thumbRect)
+
+	// Borde del thumb
+	renderer.SetDrawColor(utils.ColorAzulNeon.R, utils.ColorAzulNeon.G, utils.ColorAzulNeon.B, 255)
+	renderer.RenderRect(&thumbRect)
+
+	// Etiqueta
+	renderer.SetDrawColor(utils.ColorBlanco.R, utils.ColorBlanco.G, utils.ColorBlanco.B, 255)
+	renderer.DebugText(sldr.X, sldr.Y-15, sldr.Title)
+
+	// Mostrar valor actual
+	if sldr.ShowValue {
+		valueStr := strconv.FormatFloat(sldr.Value, 'f', sldr.Precision, 64)
+		renderer.DebugText(sldr.X+sldr.Width+15, sldr.Y, valueStr)
+	}
+}
+
 // Renderizar indicador de estado circular
 func (m *MenuSystem) renderStatusIndicator(renderer *sdl.Renderer, x, y float32, active bool, glowIntensity float32) {
 	centerX, centerY := x, y
@@ -617,6 +710,11 @@ func (m *MenuSystem) HandleMouseMotion(x, y int32) {
 	for _, btn := range m.Buttons {
 		btn.IsHovered = m.isPointInButton(x, y, *btn)
 	}
+
+	// Actualizar sliders
+	for _, sldr := range m.Sliders {
+		sldr.HandleMouseMotion(x, y)
+	}
 }
 
 func (m *MenuSystem) HandleMouseClick(x, y int32, pressed bool) {
@@ -627,6 +725,11 @@ func (m *MenuSystem) HandleMouseClick(x, y int32, pressed bool) {
 				btn.Action()
 			}
 		}
+	}
+
+	// Manejar clics en sliders
+	for _, sldr := range m.Sliders {
+		sldr.HandleMousePress(x, y, pressed)
 	}
 
 	// Manejar clics en campos de texto (solo en menu de configuracion)
@@ -750,6 +853,16 @@ func (m *MenuSystem) HandleKeyInput(keysc sdl.Scancode, pressed bool) {
 					val := utils.StrToFloat(field.Text)
 					m.Led_s.S.Brightness = val
 					settings.SaveSettings(m.Led_s.S)
+				case "IP":
+					m.Led_s.S.IP = field.Text
+					m.Led_s.WifiDev.IP = field.Text
+					settings.SaveSettings(m.Led_s.S)
+					m.Led_s.WifiDev.Reconnect()
+				case "PORT":
+					m.Led_s.S.Port = field.Text
+					m.Led_s.WifiDev.Port = field.Text
+					settings.SaveSettings(m.Led_s.S)
+					m.Led_s.WifiDev.Reconnect()
 				default:
 				}
 

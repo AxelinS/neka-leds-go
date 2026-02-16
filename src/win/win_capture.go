@@ -2,67 +2,8 @@ package win
 
 import (
 	"fmt"
-	"syscall"
 	"unsafe"
 )
-
-var (
-	user32 = syscall.NewLazyDLL("user32.dll")
-	gdi32  = syscall.NewLazyDLL("gdi32.dll")
-
-	procGetDC     = user32.NewProc("GetDC")
-	procReleaseDC = user32.NewProc("ReleaseDC")
-
-	procCreateCompatibleDC     = gdi32.NewProc("CreateCompatibleDC")
-	procCreateCompatibleBitmap = gdi32.NewProc("CreateCompatibleBitmap")
-	procSelectObject           = gdi32.NewProc("SelectObject")
-	procBitBlt                 = gdi32.NewProc("BitBlt")
-	procDeleteDC               = gdi32.NewProc("DeleteDC")
-	procDeleteObject           = gdi32.NewProc("DeleteObject")
-	procGetDIBits              = gdi32.NewProc("GetDIBits")
-)
-
-type BITMAPINFOHEADER struct {
-	Size          uint32
-	Width         int32
-	Height        int32
-	Planes        uint16
-	BitCount      uint16
-	Compression   uint32
-	SizeImage     uint32
-	XPelsPerMeter int32
-	YPelsPerMeter int32
-	ClrUsed       uint32
-	ClrImportant  uint32
-}
-
-type BITMAPINFO struct {
-	Header BITMAPINFOHEADER
-	Colors [1]uint32
-}
-
-// Implementation interface for different capture methods
-type captureImpl interface {
-	Capture() []byte
-	Close()
-	IsAlive() bool
-}
-
-// Wrapper used by the rest of the program
-type ScreenCapturer struct {
-	impl          captureImpl
-	width, height int
-	lastMode      int // 0=auto, 1=GDI forced
-}
-
-// GDI implementation (original behavior)
-type gdiImpl struct {
-	width, height int
-	hdc, memDC    uintptr
-	bitmap        uintptr
-	buf           []byte
-	bmi           BITMAPINFO
-}
 
 func newGDIImpl(w, h int) *gdiImpl {
 	hdc, _, _ := procGetDC.Call(0)

@@ -42,12 +42,56 @@ Al final deberías ver que dxgi_capture.dll se ha generado en win (por la propie
 Comprueba que el archivo existe:
 dir ..\dxgi_capture.dll
 
-- Ejecuta las pruebas Go (en la raíz del repo):
-go test ./src/win -run TestDXGIInitAndCapture -v
-(Si no aparece la DLL en la carpeta del binario, copia src\win\dxgi_capture.dll a la raíz o junto al ejecutable).
-
 - Ejecutar la app
 Compila/executa tu aplicación como de costumbre (la captura elegirá DXGI automáticamente si la DLL y la inicialización funcionan):
+```
+go build -ldflags "-H=windowsgui" .
+```
+
+
+### - EN -
+### Commands
+## Build
+go build -ldflags "-H=windowsgui" .
+
+## Below is a step-by-step guide to compile dxgi_capture.dll from your "x64 Native Tools Command Prompt for VS 2022" and verify that everything works:
+
+Clean and prepare the build folder (run in the x64 Native Tools prompt)
+In the plugin project directory:
+```
+cd .\go-leds\src\win\dxgi
+```
+Remove previous build (if it exists) and create build folder:
+```
+rmdir /s /q build
+mkdir build
+cd build
+```
+Configure with CMake
+Run:
+```
+cmake .. -G "NMake Makefiles"
+```
+Wait for the output; the compiler should be detected and the error "CMAKE_CXX_COMPILER not set" should NOT appear.
+If an error appears: make sure you are in the "x64 Native Tools…" prompt and that cl is available (run cl to verify).
+
+Compile
+Run:
+```
+cmake --build . --config Release
+```
+At the end, you should see that dxgi_capture.dll has been generated in win (due to the RUNTIME_OUTPUT_DIRECTORY property).
+
+Verify (optional)
+Check that the file exists:
+```
+dir ..\dxgi_capture.dll
+```
+
+(If the DLL does not appear in the binary folder, copy src\win\dxgi_capture.dll to the root directory or next to the executable.)
+
+Run the app
+Build/run your application as usual (capture will automatically choose DXGI if the DLL and initialization work correctly):
 ```
 go build -ldflags "-H=windowsgui" .
 ```

@@ -120,7 +120,6 @@ func DiscoverESP32() []ESP32 {
 				PortName:  port,
 				Connected: true,
 			})
-
 		} else {
 			s.Close()
 		}

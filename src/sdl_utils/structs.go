@@ -4,6 +4,7 @@ import (
 	"go-neka-leds/src/screen"
 	btn "go-neka-leds/src/sdl_utils/widgets/button"
 	ifield "go-neka-leds/src/sdl_utils/widgets/inputfield"
+	slider "go-neka-leds/src/sdl_utils/widgets/slider"
 	"go-neka-leds/src/utils"
 
 	"github.com/Zyko0/go-sdl3/sdl"
@@ -24,6 +25,7 @@ type MenuSystem struct {
 	State          MenuState
 	Buttons        map[string]*btn.AnimatedButton
 	InputFields    map[string]*ifield.InputField
+	Sliders        map[string]*slider.Slider
 	AnimationTime  float64
 	MouseX, MouseY int32
 	Keys           []bool
