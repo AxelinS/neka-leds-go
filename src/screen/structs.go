@@ -38,6 +38,10 @@ type LedsManager struct {
 	LinesCinema        []SampleLine
 	PixelCinema        []PixelLine
 	ScaledLinesCinema  []PixelLine
+
+	// Harmonic processing state
+	HarmonicConfig *HarmonicProcessingConfig
+	TemporalFilter *TemporalFilter
 }
 
 type Side int

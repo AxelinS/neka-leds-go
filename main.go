@@ -111,6 +111,9 @@ func main() {
 		LinesCinema:  screen.PixelLinesToSampleLines(pixelLinesCine, width),
 	}
 
+	// Initialize harmonic processing
+	led_s.InitializeHarmonicProcessing()
+
 	cap := win.NewScreenCapturer(led_s.Width, led_s.Height)
 	defer cap.Close()
 

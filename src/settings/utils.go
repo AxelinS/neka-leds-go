@@ -27,6 +27,25 @@ type Settings struct {
 	Saturation float64 // Saturación: 0.0 (gris) a 2.0 (muy saturado). 1.0 = sin cambio
 	Gamma      float64 // Gamma de salida: típicamente 2.2 (usa >0)
 
+	// === HARMONIC PROCESSING PARAMETERS ===
+	// Spatial Light Field Harmonic System
+
+	EnableHarmonicProcessing bool    // Activar/desactivar sistema armónico
+	HarmonicRegionSize       int     // Tamaño región de muestreo: 1-100 recomendado 5-20
+	EnableWeightedSampling   bool    // Ponderar pixeles hacia bordes
+	HarmonicWeightSelf       float64 // Peso LED propio en mezcla: típicamente 0.7
+	HarmonicWeightNeighbor   float64 // Peso por cada vecino: típicamente 0.15
+	EnableSpatialHarmonic    bool    // Activar mezcla con vecinos
+	EnableTemporalSmoothing  bool    // Activar filtro temporal exponencial
+	TemporalAlpha            float64 // Factor suavizado temporal: 0.15-0.25 recomendado
+	EnablePowerLimit         bool    // Limitar potencia global
+	PowerLimitThreshold      float64 // Límite luminancia total
+
+	// === Matriz de corrección RGB 3x3 ===
+	// Formato: [r00 r01 r02 g10 g11 g12 b20 b21 b22]
+	// Inicialmente diagonal: [rGain 0 0 0 gGain 0 0 0 bGain]
+	CorrectionMatrixValues [9]float64
+
 	// === Resto de configuración ===
 	LedsCount        int
 	PixelMethod      int // Modo de obtencion de pixeles - 0 kernel, 1 lineas, 2 pixel
@@ -59,6 +78,25 @@ func GetDefaultSettings() Settings {
 		Brightness:  0.4, // 40% de brillo base (ajustable vía UI)
 		Saturation:  1.0, // Saturación por defecto (sin cambio)
 		Gamma:       2.2, // Gamma por defecto
+
+		// === HARMONIC PROCESSING (NUEVAS CARACTERÍSTICAS) ===
+		EnableHarmonicProcessing: true, // Sistema armónico activado
+		HarmonicRegionSize:       15,   // Región de 15x15 píxeles
+		EnableWeightedSampling:   true, // Ponderar bordes
+		HarmonicWeightSelf:       0.7,  // 70% peso propio
+		HarmonicWeightNeighbor:   0.15, // 15% cada vecino
+		EnableSpatialHarmonic:    true, // Mezcla con vecinos activada
+		EnableTemporalSmoothing:  true, // Suavizado temporal activado
+		TemporalAlpha:            0.2,  // Factor de suavizado: 0.2
+		EnablePowerLimit:         true, // Limitador de potencia activado
+		PowerLimitThreshold:      50.0, // Límite luminancia total
+
+		// === Matriz corrección RGB (inicialmente diagonal = ganancias RGB) ===
+		CorrectionMatrixValues: [9]float64{
+			1.0, 0.0, 0.0, // Red row
+			0.0, 1.0, 0.0, // Green row
+			0.0, 0.0, 1.0, // Blue row
+		},
 
 		// === Configuración de LEDs ===
 		LedsCount:        84,

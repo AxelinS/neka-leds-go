@@ -17,6 +17,8 @@ import (
 const (
 	MenuPrincipal MenuState = iota
 	MenuConfiguracion
+	MenuHarmonicConfig
+	MenuRGBCalibration
 )
 
 // Inicializar el sistema de menu
@@ -242,6 +244,26 @@ func (m *MenuSystem) setupConfigMenu() {
 				m.Buttons["UsingWifi"].UpdateColor()
 			},
 		},
+		"HarmonicConfig": {
+			X: 10, Y: 360, Width: 100, Height: 50,
+			Text:       "Harmonics",
+			Color:      btn.ColorAzulTronOff,
+			HoverColor: btn.ColorAzulTronOn,
+			Scale:      1.0, Alpha: 255,
+			Switch: true,
+			Active: true,
+			Action: m.openHarmonicMenu,
+		},
+		"RGBCalibration": {
+			X: 120, Y: 360, Width: 60, Height: 50,
+			Text:       "Tune",
+			Color:      btn.ColorAzulTronOff,
+			HoverColor: btn.ColorAzulTronOn,
+			Scale:      1.0, Alpha: 255,
+			Switch: true,
+			Active: true,
+			Action: m.openRGBMenu,
+		},
 	}
 	m.InputFields = map[string]*ifield.InputField{
 		"LedsCount": {
@@ -314,24 +336,198 @@ func (m *MenuSystem) setupConfigMenu() {
 
 	// Configurar callbacks para guardar cambios
 	for name, sldr := range m.Sliders {
-		sldr.OnChange = func() {
-			switch name {
+		// Capturar variables localmente para evitar problema de closure
+		slidername := name
+		slider := sldr
+		slider.OnChange = func() {
+			switch slidername {
 			case "RCal":
-				m.Led_s.S.RCal = sldr.Value
+				m.Led_s.S.RCal = slider.Value
 			case "GCal":
-				m.Led_s.S.GCal = sldr.Value
+				m.Led_s.S.GCal = slider.Value
 			case "BCal":
-				m.Led_s.S.BCal = sldr.Value
+				m.Led_s.S.BCal = slider.Value
 			case "Temperature":
-				m.Led_s.S.Temperature = sldr.Value
+				m.Led_s.S.Temperature = slider.Value
 			case "Brightness":
-				m.Led_s.S.Brightness = sldr.Value
+				m.Led_s.S.Brightness = slider.Value
 			case "Saturation":
-				m.Led_s.S.Saturation = sldr.Value
+				m.Led_s.S.Saturation = slider.Value
 			case "Gamma":
-				m.Led_s.S.Gamma = sldr.Value
+				m.Led_s.S.Gamma = slider.Value
 			}
 			settings.SaveSettings(m.Led_s.S)
+			// Aplicar cambios inmediatamente a los LEDs
+			m.Led_s.UpdateHarmonicProcessing()
+		}
+	}
+}
+
+// Configurar menu de sistemas armonicos
+func (m *MenuSystem) setupHarmonicMenu() {
+	m.Buttons = map[string]*btn.AnimatedButton{
+		"BackMenu": {
+			X: 180, Y: 5, Width: 55, Height: 28,
+			Text:       "Back",
+			Color:      utils.ColorAzulTron,
+			HoverColor: utils.ColorAzulNeon,
+			Scale:      1.0, Alpha: 255,
+			Action: m.backFromHarmonicMenu,
+		},
+		"EnableHarmonic": {
+			X: 10, Y: 80, Width: 80, Height: 40,
+			Text:       "Harmonic",
+			Color:      btn.GetBtnColor(m.Led_s.S.EnableHarmonicProcessing, m.Led_s.S.EnableHarmonicProcessing),
+			HoverColor: utils.ColorAzulNeon,
+			Active:     m.Led_s.S.EnableHarmonicProcessing,
+			Switch:     true,
+			Action: func() {
+				m.Led_s.S.EnableHarmonicProcessing = !m.Led_s.S.EnableHarmonicProcessing
+				settings.SaveSettings(m.Led_s.S)
+				m.Led_s.UpdateHarmonicProcessing()
+				m.Buttons["EnableHarmonic"].Active = m.Led_s.S.EnableHarmonicProcessing
+				m.Buttons["EnableHarmonic"].UpdateColor()
+			},
+		},
+		"EnableWeighted": {
+			X: 100, Y: 80, Width: 80, Height: 40,
+			Text:       "Weighted",
+			Color:      btn.GetBtnColor(m.Led_s.S.EnableWeightedSampling, m.Led_s.S.EnableWeightedSampling),
+			HoverColor: utils.ColorAzulNeon,
+			Active:     m.Led_s.S.EnableWeightedSampling,
+			Switch:     true,
+			Action: func() {
+				m.Led_s.S.EnableWeightedSampling = !m.Led_s.S.EnableWeightedSampling
+				settings.SaveSettings(m.Led_s.S)
+				m.Led_s.UpdateHarmonicProcessing()
+				m.Buttons["EnableWeighted"].Active = m.Led_s.S.EnableWeightedSampling
+				m.Buttons["EnableWeighted"].UpdateColor()
+			},
+		},
+		"EnableSpatial": {
+			X: 190, Y: 80, Width: 80, Height: 40,
+			Text:       "Spatial",
+			Color:      btn.GetBtnColor(m.Led_s.S.EnableSpatialHarmonic, m.Led_s.S.EnableSpatialHarmonic),
+			HoverColor: utils.ColorAzulNeon,
+			Active:     m.Led_s.S.EnableSpatialHarmonic,
+			Switch:     true,
+			Action: func() {
+				m.Led_s.S.EnableSpatialHarmonic = !m.Led_s.S.EnableSpatialHarmonic
+				settings.SaveSettings(m.Led_s.S)
+				m.Led_s.UpdateHarmonicProcessing()
+				m.Buttons["EnableSpatial"].Active = m.Led_s.S.EnableSpatialHarmonic
+				m.Buttons["EnableSpatial"].UpdateColor()
+			},
+		},
+		"EnableTemporal": {
+			X: 10, Y: 140, Width: 80, Height: 40,
+			Text:       "Temporal",
+			Color:      btn.GetBtnColor(m.Led_s.S.EnableTemporalSmoothing, m.Led_s.S.EnableTemporalSmoothing),
+			HoverColor: utils.ColorAzulNeon,
+			Active:     m.Led_s.S.EnableTemporalSmoothing,
+			Switch:     true,
+			Action: func() {
+				m.Led_s.S.EnableTemporalSmoothing = !m.Led_s.S.EnableTemporalSmoothing
+				settings.SaveSettings(m.Led_s.S)
+				m.Led_s.UpdateHarmonicProcessing()
+				m.Buttons["EnableTemporal"].Active = m.Led_s.S.EnableTemporalSmoothing
+				m.Buttons["EnableTemporal"].UpdateColor()
+			},
+		},
+		"EnablePowerLimit": {
+			X: 100, Y: 140, Width: 80, Height: 40,
+			Text:       "PowerLimit",
+			Color:      btn.GetBtnColor(m.Led_s.S.EnablePowerLimit, m.Led_s.S.EnablePowerLimit),
+			HoverColor: utils.ColorAzulNeon,
+			Active:     m.Led_s.S.EnablePowerLimit,
+			Switch:     true,
+			Action: func() {
+				m.Led_s.S.EnablePowerLimit = !m.Led_s.S.EnablePowerLimit
+				settings.SaveSettings(m.Led_s.S)
+				m.Led_s.UpdateHarmonicProcessing()
+				m.Buttons["EnablePowerLimit"].Active = m.Led_s.S.EnablePowerLimit
+				m.Buttons["EnablePowerLimit"].UpdateColor()
+			},
+		},
+	}
+
+	m.Sliders = map[string]*slider.Slider{
+		"RegionSize":     slider.NewSlider(10, 200, 150, 20, 1.0, 100.0, float64(m.Led_s.S.HarmonicRegionSize), "Region Size"),
+		"WeightSelf":     slider.NewSlider(10, 240, 150, 20, 0.0, 1.0, m.Led_s.S.HarmonicWeightSelf, "Weight Self"),
+		"WeightNeighbor": slider.NewSlider(10, 280, 150, 20, 0.0, 0.5, m.Led_s.S.HarmonicWeightNeighbor, "Weight Neighbor"),
+		"TemporalAlpha":  slider.NewSlider(10, 320, 150, 20, 0.0, 1.0, m.Led_s.S.TemporalAlpha, "Temporal Alpha"),
+		"PowerThreshold": slider.NewSlider(10, 360, 150, 20, 0.0, 255.0, m.Led_s.S.PowerLimitThreshold, "Power Threshold"),
+	}
+
+	// Configurar callbacks para guardar cambios
+	for name, sldr := range m.Sliders {
+		sldr.OnChange = func() {
+			switch name {
+			case "RegionSize":
+				m.Led_s.S.HarmonicRegionSize = int(sldr.Value)
+			case "WeightSelf":
+				m.Led_s.S.HarmonicWeightSelf = sldr.Value
+			case "WeightNeighbor":
+				m.Led_s.S.HarmonicWeightNeighbor = sldr.Value
+			case "TemporalAlpha":
+				m.Led_s.S.TemporalAlpha = sldr.Value
+			case "PowerThreshold":
+				m.Led_s.S.PowerLimitThreshold = sldr.Value
+			}
+			settings.SaveSettings(m.Led_s.S)
+			m.Led_s.UpdateHarmonicProcessing()
+		}
+	}
+}
+
+// Configurar menu de calibracion RGB
+func (m *MenuSystem) setupRGBMenu() {
+	m.Buttons = map[string]*btn.AnimatedButton{
+		"BackMenu": {
+			X: 180, Y: 5, Width: 55, Height: 28,
+			Text:       "Back",
+			Color:      utils.ColorAzulTron,
+			HoverColor: utils.ColorAzulNeon,
+			Scale:      1.0, Alpha: 255,
+			Action: m.backFromRGBMenu,
+		},
+	}
+
+	m.Sliders = map[string]*slider.Slider{
+		"RCal":        slider.NewSlider(10, 80, 150, 20, 0.1, 2.0, m.Led_s.S.RCal, "Red Gain"),
+		"GCal":        slider.NewSlider(10, 120, 150, 20, 0.1, 2.0, m.Led_s.S.GCal, "Green Gain"),
+		"BCal":        slider.NewSlider(10, 160, 150, 20, 0.1, 2.0, m.Led_s.S.BCal, "Blue Gain"),
+		"Temperature": slider.NewSlider(10, 200, 150, 20, -1.0, 1.0, m.Led_s.S.Temperature, "Color Temp"),
+		"Brightness":  slider.NewSlider(10, 240, 150, 20, 0.0, 1.0, m.Led_s.S.Brightness, "Brightness"),
+		"Saturation":  slider.NewSlider(10, 280, 150, 20, 0.0, 2.0, m.Led_s.S.Saturation, "Saturation"),
+		"Gamma":       slider.NewSlider(10, 320, 150, 20, 0.1, 4.0, m.Led_s.S.Gamma, "Gamma"),
+	}
+
+	// Configurar callbacks para guardar cambios
+	for name, sldr := range m.Sliders {
+		// Capturar variables localmente para evitar problema de closure
+		slidername := name
+		slider := sldr
+		slider.OnChange = func() {
+			switch slidername {
+			case "RCal":
+				m.Led_s.S.RCal = slider.Value
+			case "GCal":
+				m.Led_s.S.GCal = slider.Value
+			case "BCal":
+				m.Led_s.S.BCal = slider.Value
+			case "Temperature":
+				m.Led_s.S.Temperature = slider.Value
+			case "Brightness":
+				m.Led_s.S.Brightness = slider.Value
+			case "Saturation":
+				m.Led_s.S.Saturation = slider.Value
+			case "Gamma":
+				m.Led_s.S.Gamma = slider.Value
+			}
+			settings.SaveSettings(m.Led_s.S)
+			// Aplicar cambios inmediatamente a los LEDs
+			m.Led_s.UpdateHarmonicProcessing()
 		}
 	}
 }
@@ -375,6 +571,10 @@ func (m *MenuSystem) Render(renderer *sdl.Renderer) {
 		m.renderMainMenu(renderer)
 	case MenuConfiguracion:
 		m.renderConfigMenu(renderer)
+	case MenuHarmonicConfig:
+		m.renderHarmonicMenu(renderer)
+	case MenuRGBCalibration:
+		m.renderRGBMenu(renderer)
 	}
 }
 
@@ -476,6 +676,63 @@ func (m *MenuSystem) renderConfigMenu(renderer *sdl.Renderer) {
 
 	renderer.DebugText(10, 290, "Wifi")
 	renderer.DebugText(152, 330, ":")
+}
+
+// Renderizar menu de calibracion RGB
+func (m *MenuSystem) renderRGBMenu(renderer *sdl.Renderer) {
+	// Titulo
+	m.renderGlowText(renderer, "RGB Calibration", m.TitleConf.X, m.TitleConf.Y, utils.ColorAzulNeon, m.TitleConf.Scale)
+
+	// Renderizar sliders para valores de calibración
+	renderer.SetDrawColor(utils.ColorBlanco.R, utils.ColorBlanco.G, utils.ColorBlanco.B, utils.ColorBlanco.A)
+	for name, sldr := range m.Sliders {
+		m.renderSlider(renderer, *sldr, name)
+	}
+
+	// Renderizar botón de retorno
+	for _, btn := range m.Buttons {
+		m.renderAnimatedButton(renderer, *btn)
+	}
+
+	// Mostrar valores actuales de configuración
+	renderer.DebugText(170, 90, "Red: "+strconv.FormatFloat(m.Led_s.S.RCal, 'f', 2, 64))
+	renderer.DebugText(170, 130, "Green: "+strconv.FormatFloat(m.Led_s.S.GCal, 'f', 2, 64))
+	renderer.DebugText(170, 170, "Blue: "+strconv.FormatFloat(m.Led_s.S.BCal, 'f', 2, 64))
+	renderer.DebugText(170, 210, "Temp: "+strconv.FormatFloat(m.Led_s.S.Temperature, 'f', 2, 64))
+	renderer.DebugText(170, 250, "Brillo: "+strconv.FormatFloat(m.Led_s.S.Brightness, 'f', 2, 64))
+	renderer.DebugText(170, 290, "Satur: "+strconv.FormatFloat(m.Led_s.S.Saturation, 'f', 2, 64))
+	renderer.DebugText(170, 330, "Gamma: "+strconv.FormatFloat(m.Led_s.S.Gamma, 'f', 2, 64))
+}
+
+// Renderizar menu de sistemas armonicos
+func (m *MenuSystem) renderHarmonicMenu(renderer *sdl.Renderer) {
+	// Titulo
+	m.renderGlowText(renderer, "Harmonic System", m.TitleConf.X, m.TitleConf.Y, utils.ColorAzulNeon, m.TitleConf.Scale)
+
+	// Renderizar botones de enable/disable
+	renderer.SetDrawColor(utils.ColorBlanco.R, utils.ColorBlanco.G, utils.ColorBlanco.B, utils.ColorBlanco.A)
+	for _, btn := range m.Buttons {
+		if btn.Text != "Back" && btn.Text != "BackMenu" {
+			m.renderAnimatedButton(renderer, *btn)
+		}
+	}
+
+	// Renderizar botón de retorno
+	if backBtn, exists := m.Buttons["BackMenu"]; exists {
+		m.renderAnimatedButton(renderer, *backBtn)
+	}
+
+	// Renderizar sliders para valores numéricos
+	for name, sldr := range m.Sliders {
+		m.renderSlider(renderer, *sldr, name)
+	}
+
+	// Mostrar valores actuales de configuración debajo de los sliders
+	renderer.DebugText(170, 210, "Region: "+strconv.Itoa(int(m.Led_s.S.HarmonicRegionSize)))
+	renderer.DebugText(170, 250, "WgtSelf: "+strconv.FormatFloat(m.Led_s.S.HarmonicWeightSelf, 'f', 2, 64))
+	renderer.DebugText(170, 290, "WgtNbor: "+strconv.FormatFloat(m.Led_s.S.HarmonicWeightNeighbor, 'f', 2, 64))
+	renderer.DebugText(170, 330, "Alpha: "+strconv.FormatFloat(m.Led_s.S.TemporalAlpha, 'f', 2, 64))
+	renderer.DebugText(170, 370, "PwrLim: "+strconv.FormatFloat(m.Led_s.S.PowerLimitThreshold, 'f', 1, 64))
 }
 
 // Renderizar boton animado
@@ -889,6 +1146,30 @@ func (m *MenuSystem) openConfigMenu() {
 func (m *MenuSystem) backToMainMenu() {
 	m.State = MenuPrincipal
 	m.setupMainMenu()
+	m.FocusedField = ""
+	m.Blocker = false
+}
+
+func (m *MenuSystem) openHarmonicMenu() {
+	m.State = MenuHarmonicConfig
+	m.setupHarmonicMenu()
+}
+
+func (m *MenuSystem) backFromHarmonicMenu() {
+	m.State = MenuConfiguracion
+	m.setupConfigMenu()
+	m.FocusedField = ""
+	m.Blocker = false
+}
+
+func (m *MenuSystem) openRGBMenu() {
+	m.State = MenuRGBCalibration
+	m.setupRGBMenu()
+}
+
+func (m *MenuSystem) backFromRGBMenu() {
+	m.State = MenuConfiguracion
+	m.setupConfigMenu()
 	m.FocusedField = ""
 	m.Blocker = false
 }

@@ -1,6 +1,7 @@
 package screen
 
 import (
+	"go-neka-leds/src/settings"
 	"math"
 	"strconv"
 	"strings"
@@ -159,6 +160,27 @@ func GetValues(r, g, b int, pts int) []byte {
 }
 
 func (l *LedsManager) GetLedValues(img []byte, w, h int, pts []Point) []byte {
+	// Use harmonic pipeline if enabled
+	if l.S.EnableHarmonicProcessing && l.HarmonicConfig != nil {
+		switch l.S.PixelMethod {
+		case 0, 2:
+			// Point/kernel sampling with points
+			return ProcessLEDPipeline(img, w, h, pts, l.HarmonicConfig, l.TemporalFilter)
+		case 1:
+			// Line sampling (cinema mode)
+			var lines []SampleLine
+			if l.S.Cinema {
+				lines = l.LinesCinema
+			} else {
+				lines = l.SampleLines
+			}
+			return ProcessLEDPipelineFromLines(img, lines, l.HarmonicConfig, l.TemporalFilter)
+		default:
+			return ProcessLEDPipeline(img, w, h, pts, l.HarmonicConfig, l.TemporalFilter)
+		}
+	}
+
+	// Fallback to legacy processing if harmonic is disabled
 	switch l.S.PixelMethod {
 	case 0:
 		return l.ComputeKernelLEDValues(img, w, h, pts)
@@ -384,4 +406,91 @@ func AdjustTemperature(r, g, b int, t float64) (int, int, int) {
 // AdjustBrightness (deprecado) - mantener por compatibilidad
 func AdjustBrightness(r, g, b int, a float64) (int, int, int) {
 	return int(float64(r) * a), int(float64(g) * a), int(float64(b) * a)
+}
+
+// ==================== HARMONIC PIPELINE INTEGRATION ====================
+
+// CreateHarmonicConfigFromSettings builds a HarmonicProcessingConfig from Settings
+func CreateHarmonicConfigFromSettings(s settings.Settings) *HarmonicProcessingConfig {
+	config := &HarmonicProcessingConfig{
+		// Sampling
+		RegionSize:             s.HarmonicRegionSize,
+		EnableWeightedSampling: s.EnableWeightedSampling,
+
+		// Spatial mixing
+		EnableSpatialHarmonic:  s.EnableSpatialHarmonic,
+		HarmonicWeightSelf:     s.HarmonicWeightSelf,
+		HarmonicWeightNeighbor: s.HarmonicWeightNeighbor,
+
+		// Temporal smoothing
+		EnableTemporalSmoothing: s.EnableTemporalSmoothing,
+		TemporalAlpha:           s.TemporalAlpha,
+
+		// Power limiting
+		EnablePowerLimit:    s.EnablePowerLimit,
+		PowerLimitThreshold: s.PowerLimitThreshold,
+
+		// Legacy compatibility
+		Brightness:  s.Brightness,
+		Saturation:  s.Saturation,
+		Temperature: s.Temperature,
+		RCal:        s.RCal,
+		GCal:        s.GCal,
+		BCal:        s.BCal,
+		Gamma:       s.Gamma,
+	}
+
+	// Convert correction matrix array to CorrectionMatrix
+	if len(s.CorrectionMatrixValues) == 9 {
+		config.CorrectionMatrix = CorrectionMatrix{
+			{s.CorrectionMatrixValues[0], s.CorrectionMatrixValues[1], s.CorrectionMatrixValues[2]},
+			{s.CorrectionMatrixValues[3], s.CorrectionMatrixValues[4], s.CorrectionMatrixValues[5]},
+			{s.CorrectionMatrixValues[6], s.CorrectionMatrixValues[7], s.CorrectionMatrixValues[8]},
+		}
+	} else {
+		// Fallback to identity if invalid
+		config.CorrectionMatrix = IdentityMatrix()
+	}
+
+	return config
+}
+
+// InitializeHarmonicProcessing initializes harmonic processing in LedsManager
+func (l *LedsManager) InitializeHarmonicProcessing() {
+	// Create harmonic config from settings
+	if l.S.EnableHarmonicProcessing {
+		l.HarmonicConfig = CreateHarmonicConfigFromSettings(l.S)
+		l.TemporalFilter = NewTemporalFilter(l.S.TemporalAlpha, l.S.LedsCount)
+	} else {
+		// Create default non-harmonic config
+		l.HarmonicConfig = &HarmonicProcessingConfig{
+			RegionSize:              1,
+			EnableWeightedSampling:  false,
+			EnableSpatialHarmonic:   false,
+			EnableTemporalSmoothing: false,
+			EnablePowerLimit:        false,
+			CorrectionMatrix:        IdentityMatrix(),
+			Brightness:              l.S.Brightness,
+			Saturation:              l.S.Saturation,
+			Temperature:             l.S.Temperature,
+			RCal:                    l.S.RCal,
+			GCal:                    l.S.GCal,
+			BCal:                    l.S.BCal,
+			Gamma:                   l.S.Gamma,
+		}
+		l.TemporalFilter = nil
+	}
+}
+
+// UpdateHarmonicProcessing updates harmonic configuration (e.g., from UI changes)
+func (l *LedsManager) UpdateHarmonicProcessing() {
+	if l.HarmonicConfig != nil {
+		newConfig := CreateHarmonicConfigFromSettings(l.S)
+		l.HarmonicConfig = newConfig
+
+		// Update temporal filter alpha if needed
+		if l.TemporalFilter != nil {
+			l.TemporalFilter.SetAlpha(l.S.TemporalAlpha)
+		}
+	}
 }
